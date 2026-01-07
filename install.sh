@@ -5,25 +5,27 @@ set -e
 # Usage: curl -sSL https://raw.githubusercontent.com/.../install.sh | bash
 
 INSTALL_DIR="$HOME/.claude-phone-cli"
-BIN_DIR="/usr/local/bin"
 REPO_URL="https://github.com/networkchuck/claude-phone.git"
 
 echo "🎯 Claude Phone CLI Installer"
 echo ""
 
-# Detect OS
+# Detect OS and set appropriate bin directory
 OS="$(uname -s)"
 case "$OS" in
   Darwin*)
     echo "✓ Detected macOS"
+    BIN_DIR="/usr/local/bin"
     ;;
   Linux*)
-    echo "⚠️  Linux detected - this installer is designed for macOS"
-    echo "   You may need to manually adjust the installation"
+    echo "✓ Detected Linux"
+    BIN_DIR="$HOME/.local/bin"
+    # Create ~/.local/bin if it doesn't exist
+    mkdir -p "$BIN_DIR"
     ;;
   *)
     echo "✗ Unsupported OS: $OS"
-    echo "   This installer only supports macOS"
+    echo "   This installer only supports macOS and Linux"
     exit 1
     ;;
 esac
@@ -33,10 +35,31 @@ echo ""
 echo "Checking dependencies..."
 if ! command -v docker &> /dev/null; then
   echo "✗ Docker not found"
-  echo "  Install Docker Desktop from: https://www.docker.com/products/docker-desktop"
+  if [ "$OS" = "Linux" ]; then
+    echo "  Install Docker Engine: https://docs.docker.com/engine/install/"
+  else
+    echo "  Install Docker Desktop: https://www.docker.com/products/docker-desktop"
+  fi
   exit 1
 fi
 echo "✓ Docker installed"
+
+# Check Docker permissions (Linux only)
+if [ "$OS" = "Linux" ]; then
+  if ! docker info &> /dev/null; then
+    echo "⚠️  Docker permission issue detected"
+    echo "  Run these commands to fix:"
+    echo "    sudo usermod -aG docker $USER"
+    echo "    newgrp docker"
+    echo "  Or run docker commands with sudo"
+    echo ""
+    read -p "Continue anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      exit 1
+    fi
+  fi
+fi
 
 # Check Claude CLI
 if ! command -v claude &> /dev/null; then
@@ -92,13 +115,29 @@ if [ -L "$BIN_DIR/claude-phone" ]; then
   rm "$BIN_DIR/claude-phone"
 fi
 
-if [ -w "$BIN_DIR" ]; then
+if [ "$OS" = "Linux" ]; then
+  # Linux: Use ~/.local/bin (no sudo needed)
   ln -s "$INSTALL_DIR/cli/bin/claude-phone.js" "$BIN_DIR/claude-phone"
   echo "✓ Symlink created: $BIN_DIR/claude-phone"
+
+  # Check if ~/.local/bin is in PATH
+  if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    echo ""
+    echo "⚠️  $HOME/.local/bin is not in your PATH"
+    echo "  Add this line to your ~/.bashrc or ~/.zshrc:"
+    echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo "  Then run: source ~/.bashrc (or ~/.zshrc)"
+  fi
 else
-  echo "Creating symlink (requires sudo)..."
-  sudo ln -s "$INSTALL_DIR/cli/bin/claude-phone.js" "$BIN_DIR/claude-phone"
-  echo "✓ Symlink created: $BIN_DIR/claude-phone"
+  # macOS: Use /usr/local/bin (may need sudo)
+  if [ -w "$BIN_DIR" ]; then
+    ln -s "$INSTALL_DIR/cli/bin/claude-phone.js" "$BIN_DIR/claude-phone"
+    echo "✓ Symlink created: $BIN_DIR/claude-phone"
+  else
+    echo "Creating symlink (requires sudo)..."
+    sudo ln -s "$INSTALL_DIR/cli/bin/claude-phone.js" "$BIN_DIR/claude-phone"
+    echo "✓ Symlink created: $BIN_DIR/claude-phone"
+  fi
 fi
 
 # Success

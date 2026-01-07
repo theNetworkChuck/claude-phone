@@ -275,12 +275,15 @@ Critical variables (see `.env.example`):
 - [x] Query API for programmatic access
 - [x] Session management for multi-turn conversations
 - [x] Hold music and audio cues
-- [x] Unified CLI installer (Phase 1 MVP complete)
+- [x] Unified CLI installer (Phase 2 complete)
   - [x] `claude-phone setup` - Interactive configuration wizard
   - [x] `claude-phone start` - Launch all services
   - [x] `claude-phone stop` - Stop all services
   - [x] `claude-phone status` - Service status check
-  - [x] One-line install script for Mac
+  - [x] `claude-phone doctor` - Health check for all services
+  - [x] `claude-phone device add/list/remove` - Device management
+  - [x] `claude-phone logs [service]` - Tail service logs
+  - [x] One-line install script (Mac + Linux)
   - [x] API key validation (ElevenLabs, OpenAI)
   - [x] Process management with PID files
   - [x] Docker compose wrapper
@@ -301,12 +304,11 @@ None documented yet. This is the initial commit.
 
 ## Future Enhancements
 
-**CLI Phase 2:**
-- [ ] `claude-phone doctor` - Health check for all services
-- [ ] `claude-phone device add/list/remove` - Device management
-- [ ] `claude-phone logs` - Tail service logs
+**CLI Phase 3:**
 - [ ] `claude-phone update` - Self-update CLI
-- [ ] Linux support in install.sh
+- [ ] `claude-phone config` - Edit configuration interactively
+- [ ] `claude-phone backup/restore` - Configuration backup
+- [ ] `claude-phone uninstall` - Clean removal
 
 **Other:**
 - [ ] Webhook notifications for call events

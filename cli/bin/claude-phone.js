@@ -6,6 +6,11 @@ import { setupCommand } from '../lib/commands/setup.js';
 import { startCommand } from '../lib/commands/start.js';
 import { stopCommand } from '../lib/commands/stop.js';
 import { statusCommand } from '../lib/commands/status.js';
+import { doctorCommand } from '../lib/commands/doctor.js';
+import { deviceAddCommand } from '../lib/commands/device/add.js';
+import { deviceListCommand } from '../lib/commands/device/list.js';
+import { deviceRemoveCommand } from '../lib/commands/device/remove.js';
+import { logsCommand } from '../lib/commands/logs.js';
 
 const program = new Command();
 
@@ -58,6 +63,71 @@ program
       await statusCommand();
     } catch (error) {
       console.error(chalk.red(`\n✗ Status check failed: ${error.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('doctor')
+  .description('Run health checks on all dependencies and services')
+  .action(async () => {
+    try {
+      await doctorCommand();
+    } catch (error) {
+      console.error(chalk.red(`\n✗ Health check failed: ${error.message}\n`));
+      process.exit(1);
+    }
+  });
+
+// Device management subcommands
+const device = program
+  .command('device')
+  .description('Manage SIP devices');
+
+device
+  .command('add')
+  .description('Add a new device')
+  .action(async () => {
+    try {
+      await deviceAddCommand();
+    } catch (error) {
+      console.error(chalk.red(`\n✗ Device add failed: ${error.message}\n`));
+      process.exit(1);
+    }
+  });
+
+device
+  .command('list')
+  .description('List all configured devices')
+  .action(async () => {
+    try {
+      await deviceListCommand();
+    } catch (error) {
+      console.error(chalk.red(`\n✗ Device list failed: ${error.message}\n`));
+      process.exit(1);
+    }
+  });
+
+device
+  .command('remove <name>')
+  .description('Remove a device by name')
+  .action(async (name) => {
+    try {
+      await deviceRemoveCommand(name);
+    } catch (error) {
+      console.error(chalk.red(`\n✗ Device remove failed: ${error.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('logs [service]')
+  .description('Tail service logs (voice-app, api-server, or all)')
+  .action(async (service) => {
+    try {
+      await logsCommand(service);
+    } catch (error) {
+      console.error(chalk.red(`\n✗ Logs command failed: ${error.message}\n`));
       process.exit(1);
     }
   });

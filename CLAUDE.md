@@ -304,9 +304,13 @@ None documented yet. This is the initial commit.
 
 ## Future Enhancements
 
-**CLI Phase 3:**
-- [ ] `claude-phone update` - Self-update CLI
-- [ ] `claude-phone config` - Edit configuration interactively
+**CLI Phase 3:** ✅ COMPLETE
+- [x] `claude-phone update` - Self-update CLI
+- [x] `claude-phone config show` - Display configuration (redacted secrets)
+- [x] `claude-phone config path` - Show config file location
+- [x] `claude-phone config reset` - Reset configuration with backup
+
+**CLI Phase 4:**
 - [ ] `claude-phone backup/restore` - Configuration backup
 - [ ] `claude-phone uninstall` - Clean removal
 

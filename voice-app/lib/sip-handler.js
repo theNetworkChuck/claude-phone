@@ -83,7 +83,7 @@ function extractVoiceLine(response) {
   // Priority 2: CUSTOM COMPLETED
   var customMatch = response.match(/🗣️\s*CUSTOM\s+COMPLETED:\s*(.+?)(?:\n|$)/im);
   if (customMatch) {
-    var text = customMatch[1].trim().replace(/\*+/g, '').replace(/\[.*?\]/g, '').trim();
+    text = customMatch[1].trim().replace(/\*+/g, '').replace(/\[.*?\]/g, '').trim();
     if (text && text.split(/\s+/).length <= 50) {
       return text;
     }

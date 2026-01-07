@@ -1,0 +1,23 @@
+{
+  "name": "claude-phone",
+  "version": "1.0.0",
+  "description": "Voice interface for Claude Code via SIP/3CX",
+  "private": true,
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:voice-app": "eslint voice-app/",
+    "lint:api-server": "eslint claude-api-server/",
+    "precommit": "npm run lint",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "husky": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "NetworkChuck",
+  "license": "MIT"
+}

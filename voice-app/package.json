@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "lint": "cd .. && npm run lint:voice-app",
+    "lint:fix": "cd .. && eslint voice-app/ --fix"
   },
   "dependencies": {
     "axios": "^1.6.0",

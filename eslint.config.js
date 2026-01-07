@@ -1,17 +1,49 @@
-// ESLint flat config for ES5-style CommonJS JavaScript
+// ESLint flat config for mixed ES5 CommonJS and ES modules
 module.exports = [
   {
     ignores: [
       'node_modules/**',
       'voice-app/node_modules/**',
       'claude-api-server/node_modules/**',
+      'cli/node_modules/**',
       'voice-app/audio/**',
       '*.md',
       '**/INTEGRATION-EXAMPLE.js'  // Example snippets, not complete code
     ]
   },
+  // CLI uses ES modules (modern Node.js)
   {
-    files: ['**/*.js'],
+    files: ['cli/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        fetch: 'readonly'
+      }
+    },
+    rules: {
+      'no-undef': 'error',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-redeclare': 'error',
+      'no-dupe-keys': 'error',
+      'no-duplicate-case': 'error',
+      'no-unreachable': 'error',
+      'no-console': 'off',
+      'prefer-const': 'warn',
+      'eqeqeq': ['warn', 'smart'],
+      'semi': ['warn', 'always']
+    }
+  },
+  // voice-app and claude-api-server use ES5-style CommonJS
+  {
+    files: ['voice-app/**/*.js', 'claude-api-server/**/*.js'],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: 'commonjs',

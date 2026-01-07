@@ -55,6 +55,7 @@ Claude Phone gives your Claude Code installation a phone number through 3CX PBX 
 claude-phone/
 ├── CLAUDE.md                 # This file
 ├── README.md                 # User-facing documentation
+├── install.sh                # One-command installer for Mac
 ├── package.json              # Root package (hooks, linting)
 ├── eslint.config.js          # ESLint configuration
 ├── docker-compose.yml        # Multi-container orchestration
@@ -62,6 +63,22 @@ claude-phone/
 ├── .gitignore
 ├── .husky/                   # Git hooks (pre-commit)
 │   └── pre-commit            # Runs lint before commits
+├── cli/                      # Unified CLI tool
+│   ├── package.json
+│   ├── bin/
+│   │   └── claude-phone.js   # CLI entry point
+│   ├── lib/
+│   │   ├── commands/         # Command implementations
+│   │   │   ├── setup.js      # Interactive setup wizard
+│   │   │   ├── start.js      # Start all services
+│   │   │   ├── stop.js       # Stop all services
+│   │   │   └── status.js     # Service status check
+│   │   ├── config.js         # Config read/write
+│   │   ├── docker.js         # Docker compose wrapper
+│   │   ├── process-manager.js # PID-based process management
+│   │   ├── validators.js     # API key validation
+│   │   └── utils.js          # Shared utilities
+│   └── test/                 # Test suite
 ├── voice-app/                # Docker container for voice handling
 │   ├── Dockerfile
 │   ├── package.json
@@ -94,6 +111,27 @@ claude-phone/
 ```
 
 ## Key Commands
+
+### Unified CLI (Recommended)
+
+```bash
+# One-line install
+curl -sSL https://raw.githubusercontent.com/networkchuck/claude-phone/main/install.sh | bash
+
+# Setup (run once)
+claude-phone setup
+
+# Start all services
+claude-phone start
+
+# Stop all services
+claude-phone stop
+
+# Check status
+claude-phone status
+```
+
+### Manual Commands (Legacy)
 
 ```bash
 # Start voice-app (Docker)
@@ -230,21 +268,32 @@ Critical variables (see `.env.example`):
 
 ## Current Phase
 
-**Production Ready** - Initial commit complete, all core features working:
+**Production Ready** - All core features complete:
 - [x] Inbound calls with VAD, Whisper, Claude, ElevenLabs
 - [x] Outbound calls with conversation mode
 - [x] Multi-device support with per-device voices/prompts
 - [x] Query API for programmatic access
 - [x] Session management for multi-turn conversations
 - [x] Hold music and audio cues
+- [x] Unified CLI installer (Phase 1 MVP complete)
+  - [x] `claude-phone setup` - Interactive configuration wizard
+  - [x] `claude-phone start` - Launch all services
+  - [x] `claude-phone stop` - Stop all services
+  - [x] `claude-phone status` - Service status check
+  - [x] One-line install script for Mac
+  - [x] API key validation (ElevenLabs, OpenAI)
+  - [x] Process management with PID files
+  - [x] Docker compose wrapper
 
 ## Key Decisions
 
-1. **ES5-style CommonJS** - Compatibility with drachtio ecosystem
-2. **Host networking mode** - Required for FreeSWITCH RTP to reach 3CX
-3. **Separate claude-api-server** - Runs on Mac with Claude Code CLI (needs Claude Max subscription)
-4. **Session-per-call** - Each call gets a Claude session for multi-turn context
-5. **VAD + DTMF #** - Dual input methods (voice activity detection + manual send)
+1. **ES5-style CommonJS** - Compatibility with drachtio ecosystem (voice-app, claude-api-server)
+2. **ES Modules for CLI** - Modern Node.js for CLI tool (separate from voice-app)
+3. **Host networking mode** - Required for FreeSWITCH RTP to reach 3CX
+4. **Separate claude-api-server** - Runs on Mac with Claude Code CLI (needs Claude Max subscription)
+5. **Session-per-call** - Each call gets a Claude session for multi-turn context
+6. **VAD + DTMF #** - Dual input methods (voice activity detection + manual send)
+7. **Config in ~/.claude-phone** - User config separate from codebase (chmod 600 for secrets)
 
 ## Known Issues
 

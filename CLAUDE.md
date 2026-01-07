@@ -275,7 +275,7 @@ Critical variables (see `.env.example`):
 - [x] Query API for programmatic access
 - [x] Session management for multi-turn conversations
 - [x] Hold music and audio cues
-- [x] Unified CLI installer (Phase 2 complete)
+- [x] Unified CLI installer (Complete - Phases 1-4)
   - [x] `claude-phone setup` - Interactive configuration wizard
   - [x] `claude-phone start` - Launch all services
   - [x] `claude-phone stop` - Stop all services
@@ -283,6 +283,10 @@ Critical variables (see `.env.example`):
   - [x] `claude-phone doctor` - Health check for all services
   - [x] `claude-phone device add/list/remove` - Device management
   - [x] `claude-phone logs [service]` - Tail service logs
+  - [x] `claude-phone update` - Self-update CLI
+  - [x] `claude-phone config show/path/reset` - Configuration management
+  - [x] `claude-phone backup/restore` - Configuration backup/restore
+  - [x] `claude-phone uninstall` - Clean removal
   - [x] One-line install script (Mac + Linux)
   - [x] API key validation (ElevenLabs, OpenAI)
   - [x] Process management with PID files
@@ -310,9 +314,10 @@ None documented yet. This is the initial commit.
 - [x] `claude-phone config path` - Show config file location
 - [x] `claude-phone config reset` - Reset configuration with backup
 
-**CLI Phase 4:**
-- [ ] `claude-phone backup/restore` - Configuration backup
-- [ ] `claude-phone uninstall` - Clean removal
+**CLI Phase 4:** ✅ COMPLETE
+- [x] `claude-phone backup` - Create timestamped configuration backups
+- [x] `claude-phone restore` - Restore configuration from backup
+- [x] `claude-phone uninstall` - Clean removal of entire installation
 
 **Other:**
 - [ ] Webhook notifications for call events

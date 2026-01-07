@@ -2,6 +2,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
 import path from 'path';
+import crypto from 'crypto';
 import {
   loadConfig,
   saveConfig,
@@ -10,6 +11,7 @@ import {
 import {
   validateElevenLabsKey,
   validateOpenAIKey,
+  validateVoiceId,
   validateExtension,
   validateIP,
   validateHostname
@@ -44,6 +46,14 @@ export async function setupCommand() {
 
   // Load existing config or create new
   let config = hasConfig ? await loadConfig() : createDefaultConfig();
+
+  // Ensure secrets exist for existing configs (backwards compatibility)
+  if (!config.secrets) {
+    config.secrets = {
+      drachtio: generateSecret(),
+      freeswitch: generateSecret()
+    };
+  }
 
   // Step 1: API Keys
   console.log(chalk.bold('\n📡 API Configuration'));
@@ -80,6 +90,14 @@ export async function setupCommand() {
 }
 
 /**
+ * Generate a random secret for Docker services
+ * @returns {string} Random 32-character hex string
+ */
+function generateSecret() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+/**
  * Create default configuration
  * @returns {object} Default config
  */
@@ -99,6 +117,10 @@ function createDefaultConfig() {
       claudeApiPort: 3333,
       httpPort: 3000,
       externalIp: 'auto'
+    },
+    secrets: {
+      drachtio: generateSecret(),
+      freeswitch: generateSecret()
     },
     devices: [],
     paths: {
@@ -329,6 +351,31 @@ async function setupDevice(config) {
       }
     }
   ]);
+
+  // Validate voice ID with ElevenLabs API
+  const voiceSpinner = ora('Validating ElevenLabs voice ID...').start();
+  const voiceValidation = await validateVoiceId(config.api.elevenlabs.apiKey, answers.voiceId);
+
+  if (!voiceValidation.valid) {
+    voiceSpinner.fail(`Voice ID validation failed: ${voiceValidation.error}`);
+    console.log(chalk.yellow('\n⚠️  You can continue setup, but the voice ID may not work.'));
+    const { continueAnyway } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'continueAnyway',
+        message: 'Continue anyway?',
+        default: false
+      }
+    ]);
+
+    if (!continueAnyway) {
+      // Let user re-enter voice ID
+      console.log(chalk.gray('\nReturning to device setup...'));
+      return setupDevice(config);
+    }
+  } else {
+    voiceSpinner.succeed(`Voice ID validated: ${voiceValidation.name}`);
+  }
 
   const device = {
     name: answers.name,

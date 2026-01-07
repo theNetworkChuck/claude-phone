@@ -55,8 +55,20 @@ export async function saveConfig(config) {
     await fs.promises.mkdir(configDir, { recursive: true, mode: 0o700 });
   }
 
+  // Backup existing config if it exists
+  if (fs.existsSync(configPath)) {
+    const backupPath = configPath + '.backup';
+    await fs.promises.copyFile(configPath, backupPath);
+  }
+
+  // Add security warning to config
+  const configWithWarning = {
+    _WARNING: 'DO NOT SHARE THIS FILE - Contains API keys and passwords',
+    ...config
+  };
+
   // Write config file
-  const data = JSON.stringify(config, null, 2);
+  const data = JSON.stringify(configWithWarning, null, 2);
   await fs.promises.writeFile(configPath, data, { mode: 0o600 });
 }
 

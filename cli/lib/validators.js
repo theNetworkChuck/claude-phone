@@ -150,3 +150,70 @@ export function validateHostname(hostname) {
   const hostnameRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
   return hostnameRegex.test(hostname);
 }
+
+/**
+ * Validate ElevenLabs voice ID
+ * @param {string} apiKey - ElevenLabs API key
+ * @param {string} voiceId - Voice ID to validate
+ * @returns {Promise<{valid: boolean, name?: string, error?: string}>} Validation result
+ */
+export async function validateVoiceId(apiKey, voiceId) {
+  if (!voiceId || voiceId.trim() === '') {
+    return {
+      valid: false,
+      error: 'Voice ID cannot be empty'
+    };
+  }
+
+  try {
+    const response = await axios.get(`https://api.elevenlabs.io/v1/voices/${voiceId}`, {
+      headers: {
+        'xi-api-key': apiKey
+      },
+      timeout: 10000
+    });
+
+    if (response.status === 200 && response.data.name) {
+      return {
+        valid: true,
+        name: response.data.name
+      };
+    }
+
+    return {
+      valid: false,
+      error: `Unexpected response: ${response.status}`
+    };
+  } catch (error) {
+    if (error.response) {
+      if (error.response.status === 404) {
+        return {
+          valid: false,
+          error: 'Voice ID not found'
+        };
+      }
+      if (error.response.status === 401) {
+        return {
+          valid: false,
+          error: 'Invalid API key (cannot validate voice ID)'
+        };
+      }
+      return {
+        valid: false,
+        error: `API error: ${error.response.status} ${error.response.statusText}`
+      };
+    }
+
+    if (error.code === 'ECONNABORTED') {
+      return {
+        valid: false,
+        error: 'Request timeout - check your internet connection'
+      };
+    }
+
+    return {
+      valid: false,
+      error: `Network error: ${error.message}`
+    };
+  }
+}

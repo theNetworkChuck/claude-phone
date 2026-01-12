@@ -319,6 +319,14 @@ None documented yet. This is the initial commit.
 - [x] `claude-phone restore` - Restore configuration from backup
 - [x] `claude-phone uninstall` - Clean removal of entire installation
 
+**Raspberry Pi Deployment:** ✅ COMPLETE (PR #9)
+- [x] `claude-phone setup` detects Pi and enters split-mode setup
+- [x] `claude-phone api-server` command for Mac-side server
+- [x] 3CX SBC detection (auto-configures port 5070 if detected)
+- [x] Mac IP validation with reachability checks
+- [x] Enhanced `status` and `doctor` for Pi ↔ Mac connectivity
+- [x] Graceful error handling when Mac unreachable during calls
+
 **Other:**
 - [ ] Webhook notifications for call events
 - [ ] Call recording and transcripts

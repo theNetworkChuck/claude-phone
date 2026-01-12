@@ -73,6 +73,60 @@ test('config module', async (t) => {
     assert.strictEqual(config.api.openai.apiKey, 'openai-key');
   });
 
+  await t.test('config with deployment.mode defaults to standard', async () => {
+    const config = {
+      version: '1.1.0',
+      deployment: {
+        mode: 'standard',
+        platform: 'darwin'
+      },
+      api: {}
+    };
+
+    await saveConfig(config);
+    const loaded = await loadConfig();
+    assert.strictEqual(loaded.deployment.mode, 'standard');
+    assert.strictEqual(loaded.deployment.platform, 'darwin');
+  });
+
+  await t.test('config with pi-split mode includes pi section', async () => {
+    const config = {
+      version: '1.1.0',
+      deployment: {
+        mode: 'pi-split',
+        platform: 'linux-arm64',
+        piDetected: true,
+        pi: {
+          sbcDetected: true,
+          drachtioPort: 5070,
+          macApiUrl: 'http://192.168.1.100:3333'
+        }
+      },
+      api: {}
+    };
+
+    await saveConfig(config);
+    const loaded = await loadConfig();
+    assert.strictEqual(loaded.deployment.mode, 'pi-split');
+    assert.strictEqual(loaded.deployment.pi.drachtioPort, 5070);
+    assert.strictEqual(loaded.deployment.pi.macApiUrl, 'http://192.168.1.100:3333');
+  });
+
+  await t.test('config version 1.1.0 includes deployment field', async () => {
+    const config = {
+      version: '1.1.0',
+      deployment: {
+        mode: 'standard',
+        platform: 'darwin'
+      }
+    };
+
+    await saveConfig(config);
+    const loaded = await loadConfig();
+    assert.strictEqual(loaded.version, '1.1.0');
+    assert.ok('deployment' in loaded, 'Should have deployment field');
+  });
+
   // Cleanup
   t.after(() => {
     if (fs.existsSync(TEST_HOME)) {

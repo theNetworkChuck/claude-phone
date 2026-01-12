@@ -7,6 +7,7 @@ import { startCommand } from '../lib/commands/start.js';
 import { stopCommand } from '../lib/commands/stop.js';
 import { statusCommand } from '../lib/commands/status.js';
 import { doctorCommand } from '../lib/commands/doctor.js';
+import { apiServerCommand } from '../lib/commands/api-server.js';
 import { deviceAddCommand } from '../lib/commands/device/add.js';
 import { deviceListCommand } from '../lib/commands/device/list.js';
 import { deviceRemoveCommand } from '../lib/commands/device/remove.js';
@@ -82,6 +83,24 @@ program
       await doctorCommand();
     } catch (error) {
       console.error(chalk.red(`\n✗ Health check failed: ${error.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('api-server')
+  .description('Start Claude API server for Pi remote connections (Mac only)')
+  .option('-p, --port <port>', 'Port to listen on', '3333')
+  .action(async (options) => {
+    try {
+      const port = parseInt(options.port, 10);
+      if (isNaN(port) || port < 1024 || port > 65535) {
+        console.error(chalk.red('\n✗ Port must be between 1024 and 65535\n'));
+        process.exit(1);
+      }
+      await apiServerCommand({ port });
+    } catch (error) {
+      console.error(chalk.red(`\n✗ API server failed: ${error.message}\n`));
       process.exit(1);
     }
   });

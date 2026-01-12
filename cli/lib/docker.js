@@ -74,6 +74,11 @@ export function generateDockerCompose(config) {
     };
   }
 
+  // Determine drachtio port from config (5070 when 3CX SBC detected, 5060 otherwise)
+  const drachtioPort = config.deployment && config.deployment.pi && config.deployment.pi.drachtioPort
+    ? config.deployment.pi.drachtioPort
+    : 5060;
+
   return `version: '3.8'
 
 # CRITICAL: All containers must use network_mode: host
@@ -88,7 +93,7 @@ services:
     network_mode: host
     command: >
       drachtio
-      --contact "sip:*:5060;transport=tcp,udp"
+      --contact "sip:*:${drachtioPort};transport=tcp,udp"
       --secret \${DRACHTIO_SECRET}
       --port 9022
       --loglevel info
@@ -136,6 +141,14 @@ export function generateEnvFile(config) {
     };
   }
 
+  // Determine Claude API URL based on deployment mode
+  let claudeApiUrl;
+  if (config.deployment && config.deployment.mode === 'pi-split' && config.deployment.pi && config.deployment.pi.macApiUrl) {
+    claudeApiUrl = config.deployment.pi.macApiUrl;
+  } else {
+    claudeApiUrl = `http://localhost:${config.server.claudeApiPort}`;
+  }
+
   const lines = [
     '# ====================================',
     '# WARNING: DO NOT SHARE THIS FILE',
@@ -168,7 +181,7 @@ export function generateEnvFile(config) {
     `SIP_PASSWORD=${config.devices[0].password}`,
     '',
     '# Claude API Server',
-    `CLAUDE_API_URL=http://localhost:${config.server.claudeApiPort}`,
+    `CLAUDE_API_URL=${claudeApiUrl}`,
     '',
     '# ElevenLabs TTS',
     `ELEVENLABS_API_KEY=${config.api.elevenlabs.apiKey}`,
@@ -238,7 +251,20 @@ export async function startContainers() {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`Docker compose failed (exit ${code}): ${output}`));
+        // AC22: Detect ARM64 image pull failure
+        if (output.includes('no matching manifest') ||
+            output.includes('image with reference') && output.includes('arm64')) {
+          const error = new Error(
+            'ARM64 Docker image pull failed.\n\n' +
+            'Try manually pulling images:\n' +
+            '  docker pull drachtio/drachtio-server:latest\n' +
+            '  docker pull drachtio/drachtio-freeswitch-mrf:latest\n\n' +
+            'If images are not available for ARM64, you may need to build them locally.'
+          );
+          reject(error);
+        } else {
+          reject(new Error(`Docker compose failed (exit ${code}): ${output}`));
+        }
       }
     });
   });

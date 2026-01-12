@@ -13,11 +13,11 @@ const CLAUDE_API_URL = process.env.CLAUDE_API_URL || 'http://localhost:3333';
  * @param {Object} options - Options including callId for session management
  * @param {string} options.callId - Call UUID for maintaining conversation context
  * @param {string} options.devicePrompt - Device-specific personality prompt
- * @param {number} options.timeout - Timeout in seconds (default: 120)
+ * @param {number} options.timeout - Timeout in seconds (default: 30, AC27)
  * @returns {Promise<string>} Claude's response
  */
 async function query(prompt, options = {}) {
-  const { callId, devicePrompt, timeout = 120 } = options;
+  const { callId, devicePrompt, timeout = 30 } = options; // AC27: Default 30s timeout
   const timestamp = new Date().toISOString();
 
   try {
@@ -37,30 +37,33 @@ async function query(prompt, options = {}) {
         headers: { 'Content-Type': 'application/json' }
       }
     );
-    
+
     if (!response.data.success) {
       throw new Error(response.data.error || 'Claude API returned failure');
     }
-    
+
     console.log(`[${timestamp}] CLAUDE Response received (${response.data.duration_ms}ms)`);
     if (response.data.sessionId) {
       console.log(`[${timestamp}] CLAUDE Session ID: ${response.data.sessionId}`);
     }
     return response.data.response;
-    
+
   } catch (error) {
-    if (error.code === 'ECONNREFUSED') {
-      console.warn(`[${timestamp}] CLAUDE API server not available, using fallback`);
-      return "I'm sorry, the Claude API server is not available right now. This is a fallback response for testing the voice interface.";
+    // AC26: Mac unreachable during call - don't crash, return helpful message
+    if (error.code === 'ECONNREFUSED' || error.code === 'EHOSTUNREACH' || error.code === 'ENETUNREACH') {
+      console.warn(`[${timestamp}] CLAUDE API server unreachable (${error.code})`);
+      return "I'm having trouble connecting to my brain right now. The Mac server may be offline or unreachable. Please try again later.";
     }
-    
+
+    // AC27: Timeout with helpful error message
     if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
       console.error(`[${timestamp}] CLAUDE Timeout after ${timeout} seconds`);
-      return "I'm sorry, that request took too long. Can you try asking something simpler?";
+      return "I'm sorry, that request took too long. This might mean the Mac server is slow or there's a network issue. Try asking something simpler, or check that claude-phone api-server is running on your Mac.";
     }
-    
+
     console.error(`[${timestamp}] CLAUDE Error:`, error.message);
-    throw error;
+    // AC26: Don't crash on unknown errors, return friendly message
+    return "I encountered an unexpected error. Please check the Mac is running claude-phone api-server and is on the same network.";
   }
 }
 

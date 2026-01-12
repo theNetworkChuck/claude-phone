@@ -6,6 +6,8 @@ import { loadConfig, configExists } from '../config.js';
 import { checkDocker, getContainerStatus } from '../docker.js';
 import { isServerRunning, getServerPid } from '../process-manager.js';
 import { validateElevenLabsKey, validateOpenAIKey } from '../validators.js';
+import { isReachable, checkClaudeApiServer as checkClaudeApiHealth } from '../network.js';
+import { checkPort } from '../port-check.js';
 
 /**
  * Check if Claude CLI is installed
@@ -179,6 +181,9 @@ export async function doctorCommand() {
   const checks = [];
   let passedCount = 0;
 
+  // Check deployment mode
+  const isPiSplit = config.deployment && config.deployment.mode === 'pi-split';
+
   // Check 1: Docker
   const dockerSpinner = ora('Checking Docker...').start();
   const dockerResult = await checkDocker();
@@ -240,20 +245,71 @@ export async function doctorCommand() {
   checks.push({ name: 'Voice-app container', passed: voiceAppResult.running });
 
   // Check 6: Claude API server
-  const apiServerSpinner = ora('Checking Claude API server...').start();
-  const apiServerResult = await checkClaudeAPIServer(config.server.claudeApiPort);
-  if (apiServerResult.running && apiServerResult.healthy) {
-    apiServerSpinner.succeed(chalk.green(`Claude API server running (PID: ${apiServerResult.pid})`));
-    passedCount++;
-  } else if (apiServerResult.running && !apiServerResult.healthy) {
-    apiServerSpinner.warn(chalk.yellow(`Claude API server running but unhealthy (PID: ${apiServerResult.pid})`));
-    console.log(chalk.gray(`  → ${apiServerResult.error}\n`));
-    passedCount++; // Count as partial pass
+  if (isPiSplit) {
+    // Pi-split mode: Check Mac IP reachability
+    const macIpSpinner = ora('Checking Mac IP reachability...').start();
+    const macIp = config.deployment.pi.macIp;
+    const macReachable = await isReachable(macIp);
+
+    if (macReachable) {
+      macIpSpinner.succeed(chalk.green(`Mac IP reachable (${macIp})`));
+      passedCount++;
+    } else {
+      macIpSpinner.fail(chalk.red(`Mac IP not reachable: ${macIp}`));
+      console.log(chalk.gray('  → Check network connection between Pi and Mac\n'));
+    }
+    checks.push({ name: 'Mac IP reachability', passed: macReachable });
+
+    // Check Claude API server on Mac
+    const apiServerSpinner = ora('Checking Claude API server on Mac...').start();
+    const apiUrl = `http://${macIp}:${config.server.claudeApiPort}`;
+    const apiHealth = await checkClaudeApiHealth(apiUrl);
+
+    if (apiHealth.healthy) {
+      apiServerSpinner.succeed(chalk.green(`Claude API server healthy at ${apiUrl}`));
+      passedCount++;
+    } else {
+      apiServerSpinner.fail(chalk.red(`Claude API server not responding`));
+      console.log(chalk.gray(`  → Run "claude-phone api-server" on your Mac\n`));
+    }
+    checks.push({ name: 'Claude API server (Mac)', passed: apiHealth.healthy });
+
+    // Check drachtio port availability
+    const drachtioPort = config.deployment.pi.drachtioPort || 5060;
+    const drachtioSpinner = ora(`Checking drachtio port ${drachtioPort}...`).start();
+    const drachtioPortCheck = await checkPort(drachtioPort);
+
+    if (drachtioPortCheck.inUse) {
+      if (drachtioPort === 5080) {
+        drachtioSpinner.succeed(chalk.green(`Port ${drachtioPort} in use (expected - drachtio running)`));
+        passedCount++;
+      } else {
+        drachtioSpinner.warn(chalk.yellow(`Port ${drachtioPort} in use (may conflict)`));
+        passedCount++; // Partial pass
+      }
+    } else {
+      drachtioSpinner.succeed(chalk.green(`Port ${drachtioPort} available`));
+      passedCount++;
+    }
+    checks.push({ name: `Drachtio port ${drachtioPort}`, passed: true });
+
   } else {
-    apiServerSpinner.fail(chalk.red(`Claude API server not running: ${apiServerResult.error}`));
-    console.log(chalk.gray('  → Run "claude-phone start" to launch services\n'));
+    // Standard mode: Check local Claude API server
+    const apiServerSpinner = ora('Checking Claude API server...').start();
+    const apiServerResult = await checkClaudeAPIServer(config.server.claudeApiPort);
+    if (apiServerResult.running && apiServerResult.healthy) {
+      apiServerSpinner.succeed(chalk.green(`Claude API server running (PID: ${apiServerResult.pid})`));
+      passedCount++;
+    } else if (apiServerResult.running && !apiServerResult.healthy) {
+      apiServerSpinner.warn(chalk.yellow(`Claude API server running but unhealthy (PID: ${apiServerResult.pid})`));
+      console.log(chalk.gray(`  → ${apiServerResult.error}\n`));
+      passedCount++; // Count as partial pass
+    } else {
+      apiServerSpinner.fail(chalk.red(`Claude API server not running: ${apiServerResult.error}`));
+      console.log(chalk.gray('  → Run "claude-phone start" to launch services\n'));
+    }
+    checks.push({ name: 'Claude API server', passed: apiServerResult.running });
   }
-  checks.push({ name: 'Claude API server', passed: apiServerResult.running });
 
   // Summary
   console.log(chalk.bold(`\n${passedCount}/${checks.length} checks passed\n`));

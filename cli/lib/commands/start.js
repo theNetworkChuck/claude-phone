@@ -7,6 +7,7 @@ import { checkDocker, writeDockerConfig, startContainers } from '../docker.js';
 import { startServer, isServerRunning } from '../process-manager.js';
 import { isClaudeInstalled, sleep } from '../utils.js';
 import { checkClaudeApiServer } from '../network.js';
+import { runPrereqChecks } from '../prereqs.js';
 
 /**
  * Start command - Launch all services
@@ -28,6 +29,13 @@ export async function startCommand() {
   const isPiMode = config.deployment?.mode === 'pi-split';
 
   console.log(chalk.gray(`Installation type: ${installationType}\n`));
+
+  // Run prerequisite checks for this installation type
+  const prereqResult = await runPrereqChecks({ type: installationType });
+  if (!prereqResult.success) {
+    console.log(chalk.red('\n❌ Prerequisites not met. Please run "claude-phone setup" to fix.\n'));
+    process.exit(1);
+  }
 
   if (isPiMode) {
     console.log(chalk.cyan('🥧 Pi Split-Mode detected\n'));
@@ -64,6 +72,15 @@ async function startApiServer(config) {
   if (!fs.existsSync(config.paths.claudeApiServer)) {
     console.log(chalk.red(`✗ Claude API server not found at: ${config.paths.claudeApiServer}`));
     console.log(chalk.gray('  Update paths in configuration\n'));
+    process.exit(1);
+  }
+
+  // Check if dependencies are installed
+  const nodeModulesPath = path.join(config.paths.claudeApiServer, 'node_modules');
+  if (!fs.existsSync(nodeModulesPath)) {
+    console.log(chalk.red('✗ Dependencies not installed in claude-api-server'));
+    console.log(chalk.yellow('\nRun the following to install dependencies:'));
+    console.log(chalk.cyan(`  cd ${config.paths.claudeApiServer} && npm install\n`));
     process.exit(1);
   }
 
@@ -206,6 +223,17 @@ async function startBoth(config, isPiMode) {
     console.log(chalk.red(`✗ Claude API server not found at: ${config.paths.claudeApiServer}`));
     console.log(chalk.gray('  Update paths in configuration\n'));
     process.exit(1);
+  }
+
+  // Check if dependencies are installed (not in Pi mode)
+  if (!isPiMode) {
+    const nodeModulesPath = path.join(config.paths.claudeApiServer, 'node_modules');
+    if (!fs.existsSync(nodeModulesPath)) {
+      console.log(chalk.red('✗ Dependencies not installed in claude-api-server'));
+      console.log(chalk.yellow('\nRun the following to install dependencies:'));
+      console.log(chalk.cyan(`  cd ${config.paths.claudeApiServer} && npm install\n`));
+      process.exit(1);
+    }
   }
 
   // Check Claude CLI only in standard mode (Pi mode connects to API server instead)

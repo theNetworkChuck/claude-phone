@@ -109,15 +109,16 @@ function displayResults(results) {
  * @returns {boolean} True if all passed
  */
 function checkAllPassed(results) {
-  // Network is informational only
-  const criticalResults = {
-    node: results.node,
-    docker: results.docker,
-    compose: results.compose,
-    disk: results.disk
-  };
+  // Only check results that were actually run (network is informational only)
+  const criticalKeys = ['node', 'docker', 'compose', 'disk'];
 
-  return Object.values(criticalResults).every(r => r.passed);
+  for (const key of criticalKeys) {
+    if (results[key] && !results[key].passed) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -129,22 +130,22 @@ function checkAllPassed(results) {
 async function offerAutoFix(results, platform) {
   const failures = [];
 
-  if (!results.node.passed && results.node.canAutoFix) {
+  if (results.node && !results.node.passed && results.node.canAutoFix) {
     failures.push('node');
   }
 
-  if (!results.docker.passed && results.docker.canAutoFix) {
+  if (results.docker && !results.docker.passed && results.docker.canAutoFix) {
     failures.push('docker');
   }
 
-  if (!results.disk.passed) {
+  if (results.disk && !results.disk.passed) {
     console.log(chalk.red('\n❌ Insufficient disk space.'));
     console.log(chalk.yellow(`Required: ${results.disk.required}, Available: ${results.disk.available || 'unknown'}`));
     console.log(chalk.gray('Please free up disk space and try again.\n'));
     return { success: false };
   }
 
-  if (!results.compose.passed) {
+  if (results.compose && !results.compose.passed) {
     console.log(chalk.yellow('\n⚠️  Docker Compose is usually installed with Docker.'));
     console.log(chalk.gray('If Docker installation succeeds, Docker Compose should be available.\n'));
   }

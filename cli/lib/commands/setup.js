@@ -649,6 +649,8 @@ async function setupPi(config) {
   console.log(chalk.gray('  1. Run "claude-phone start" to launch voice-app'));
   console.log(chalk.gray('  2. Call extension ' + config.devices[0].extension + ' from your phone'));
   console.log(chalk.gray('  3. Start talking to Claude!\n'));
+
+  return config;
 }
 
 /**

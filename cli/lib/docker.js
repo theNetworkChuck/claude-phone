@@ -196,6 +196,8 @@ export function generateEnvFile(config) {
     'DRACHTIO_HOST=127.0.0.1',
     'DRACHTIO_PORT=9022',
     `DRACHTIO_SECRET=${config.secrets.drachtio}`,
+    // SIP port for Contact header (5070 when 3CX SBC is present, 5060 otherwise)
+    `DRACHTIO_SIP_PORT=${config.deployment?.pi?.drachtioPort || 5060}`,
     '',
     '# FreeSWITCH Configuration',
     'FREESWITCH_HOST=127.0.0.1',

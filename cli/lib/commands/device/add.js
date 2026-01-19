@@ -83,10 +83,10 @@ export async function deviceAddCommand() {
       }
     },
     {
-      type: 'editor',
+      type: 'input',
       name: 'prompt',
-      message: 'System prompt (opens editor):',
-      default: `You are ${answers => answers.name}, a helpful AI assistant accessible via phone.`
+      message: 'System prompt:',
+      default: (answers) => `You are ${answers.name}, a helpful AI assistant accessible via phone.`
     }
   ]);
 

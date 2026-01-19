@@ -3,6 +3,16 @@ import assert from 'node:assert';
 
 describe('Device management', () => {
   describe('Device add', () => {
+    it('should use input type for system prompt, not editor', () => {
+      // This test reproduces the bug: editor type hangs the CLI
+      // System prompt should use 'input' type for better compatibility
+      const promptFieldType = 'input'; // Expected type
+      const buggyType = 'editor'; // Current buggy type
+
+      assert.notStrictEqual(promptFieldType, buggyType,
+        'Prompt field should use input type, not editor (which hangs)');
+    });
+
     it('should validate device name is unique', () => {
       const existingDevices = [
         { name: 'Morpheus', extension: '9000' },

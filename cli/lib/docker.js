@@ -175,8 +175,11 @@ export function generateEnvFile(config) {
   if (config.deployment && config.deployment.mode === 'pi-split' && config.deployment.pi && config.deployment.pi.macIp) {
     // Pi mode: point to remote API server
     claudeApiUrl = `http://${config.deployment.pi.macIp}:${config.server.claudeApiPort}`;
+  } else if (config.deployment && config.deployment.mode === 'voice-server' && config.deployment.apiServerIp) {
+    // Voice server mode (non-Pi): point to remote API server
+    claudeApiUrl = `http://${config.deployment.apiServerIp}:${config.server.claudeApiPort}`;
   } else {
-    // Standard mode: local API server
+    // Both or api-server mode: local API server
     claudeApiUrl = `http://localhost:${config.server.claudeApiPort}`;
   }
 

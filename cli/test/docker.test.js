@@ -193,4 +193,90 @@ test('docker compose generation', async (t) => {
     assert.ok(envFile.includes('CLAUDE_API_URL=http://localhost:3333'),
       'Should use localhost for standard mode');
   });
+
+  await t.test('generates env file with localhost for both mode (all-in-one)', () => {
+    const config = {
+      server: {
+        externalIp: '192.168.1.50',
+        httpPort: 3000,
+        claudeApiPort: 3333
+      },
+      sip: {
+        domain: '3cx.local',
+        registrar: '192.168.1.10'
+      },
+      devices: [
+        {
+          extension: '9000',
+          authId: 'user123',
+          password: 'pass123',
+          voiceId: 'voice-id'
+        }
+      ],
+      api: {
+        elevenlabs: { apiKey: 'elev-key' },
+        openai: { apiKey: 'openai-key' }
+      },
+      secrets: {
+        drachtio: 'drachtio-secret',
+        freeswitch: 'fs-secret'
+      },
+      deployment: {
+        mode: 'both'
+      }
+    };
+
+    const envFile = generateEnvFile(config);
+
+    // Should use localhost for both mode (all services on same machine)
+    assert.ok(envFile.includes('CLAUDE_API_URL=http://localhost:3333'),
+      'Should use localhost for both mode (all-in-one installation)');
+
+    // Should NOT use any remote IP
+    assert.ok(!envFile.includes('CLAUDE_API_URL=http://192.168.'),
+      'Should not use remote IP for both mode');
+  });
+
+  await t.test('generates env file with remote API for voice-server mode', () => {
+    const config = {
+      server: {
+        externalIp: '192.168.1.50',
+        httpPort: 3000,
+        claudeApiPort: 3333
+      },
+      sip: {
+        domain: '3cx.local',
+        registrar: '192.168.1.10'
+      },
+      devices: [
+        {
+          extension: '9000',
+          authId: 'user123',
+          password: 'pass123',
+          voiceId: 'voice-id'
+        }
+      ],
+      api: {
+        elevenlabs: { apiKey: 'elev-key' },
+        openai: { apiKey: 'openai-key' }
+      },
+      secrets: {
+        drachtio: 'drachtio-secret',
+        freeswitch: 'fs-secret'
+      },
+      deployment: {
+        mode: 'voice-server',
+        apiServerIp: '192.168.1.200'
+      }
+    };
+
+    const envFile = generateEnvFile(config);
+
+    // Voice server mode should use the remote API server IP, not localhost
+    assert.ok(envFile.includes('CLAUDE_API_URL=http://192.168.1.200:3333'),
+      'voice-server mode should use remote apiServerIp');
+
+    assert.ok(!envFile.includes('CLAUDE_API_URL=http://localhost:'),
+      'voice-server mode should NOT use localhost when apiServerIp is set');
+  });
 });

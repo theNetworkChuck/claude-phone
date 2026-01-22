@@ -669,7 +669,7 @@ function createDefaultConfig() {
   return {
     version: '1.0.0',
     api: {
-      elevenlabs: { apiKey: '', validated: false },
+      elevenlabs: { apiKey: '', defaultVoiceId: '', validated: false },
       openai: { apiKey: '', validated: false }
     },
     sip: {
@@ -736,10 +736,52 @@ async function setupAPIKeys(config) {
       throw new Error('Setup cancelled due to invalid API key');
     }
 
-    config.api.elevenlabs = { apiKey: elevenLabsKey, validated: false };
+    config.api.elevenlabs = { apiKey: elevenLabsKey, defaultVoiceId: '', validated: false };
   } else {
     spinner.succeed('ElevenLabs API key validated');
-    config.api.elevenlabs = { apiKey: elevenLabsKey, validated: true };
+    config.api.elevenlabs = { apiKey: elevenLabsKey, defaultVoiceId: '', validated: true };
+  }
+
+  // Ask for default voice ID immediately after API key
+  const voiceIdAnswers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'voiceId',
+      message: 'ElevenLabs default voice ID (for all devices):',
+      default: config.api.elevenlabs.defaultVoiceId || '',
+      validate: (input) => {
+        if (!input || input.trim() === '') {
+          return 'Voice ID is required';
+        }
+        return true;
+      }
+    }
+  ]);
+
+  const defaultVoiceId = voiceIdAnswers.voiceId;
+  const voiceSpinner = ora('Validating ElevenLabs voice ID...').start();
+
+  const voiceValidation = await validateVoiceId(elevenLabsKey, defaultVoiceId);
+  if (!voiceValidation.valid) {
+    voiceSpinner.fail(`Voice ID validation failed: ${voiceValidation.error}`);
+    console.log(chalk.yellow('\n⚠️  You can continue setup, but the voice ID may not work.'));
+    const { continueAnyway } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'continueAnyway',
+        message: 'Continue anyway?',
+        default: false
+      }
+    ]);
+
+    if (!continueAnyway) {
+      throw new Error('Setup cancelled due to invalid voice ID');
+    }
+
+    config.api.elevenlabs.defaultVoiceId = defaultVoiceId;
+  } else {
+    voiceSpinner.succeed(`Voice ID validated: ${voiceValidation.name}`);
+    config.api.elevenlabs.defaultVoiceId = defaultVoiceId;
   }
 
   // OpenAI API Key
@@ -930,7 +972,7 @@ async function setupDevice(config) {
       type: 'input',
       name: 'voiceId',
       message: 'ElevenLabs voice ID:',
-      default: existingDevice?.voiceId || '',
+      default: existingDevice?.voiceId || config.api.elevenlabs.defaultVoiceId || '',
       validate: (input) => {
         if (!input || input.trim() === '') {
           return 'Voice ID is required';

@@ -75,6 +75,7 @@ export async function deviceAddCommand() {
       type: 'input',
       name: 'voiceId',
       message: 'ElevenLabs voice ID:',
+      default: config.api.elevenlabs.defaultVoiceId || '',
       validate: (input) => {
         if (!input || input.trim() === '') {
           return 'Voice ID cannot be empty';

@@ -55,14 +55,14 @@ claude-phone logs [service]           # Tail logs (voice-app, drachtio, freeswit
 ```bash
 claude-phone device add               # Add a new device/extension
 claude-phone device list              # List configured devices
-claude-phone device remove            # Remove a device
+claude-phone device remove <name>     # Remove a device
 ```
 
 ### Backup & Recovery
 
 ```bash
 claude-phone backup                   # Create timestamped configuration backup
-claude-phone restore [file]           # Restore configuration from backup
+claude-phone restore                  # Restore configuration from backup (interactive)
 ```
 
 ### Maintenance

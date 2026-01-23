@@ -128,16 +128,16 @@ The setup wizard auto-detects your environment (Pi vs desktop) and guides you th
 | `claude-phone doctor` | Health check for all services |
 | `claude-phone device add` | Add a new device/extension |
 | `claude-phone device list` | List configured devices |
-| `claude-phone device remove` | Remove a device |
+| `claude-phone device remove <name>` | Remove a device |
 | `claude-phone logs [service]` | Tail service logs |
 | `claude-phone config show` | Display configuration (secrets redacted) |
 | `claude-phone config path` | Show config file location |
 | `claude-phone config reset` | Reset configuration (creates backup) |
 | `claude-phone backup` | Create configuration backup |
-| `claude-phone restore [file]` | Restore from backup |
+| `claude-phone restore` | Restore from backup (interactive) |
 | `claude-phone update` | Self-update the CLI |
 | `claude-phone uninstall` | Complete removal |
-| `claude-phone api-server` | Start API server (split deployments) |
+| `claude-phone api-server [--port N]` | Start API server (split deployments) |
 
 ## Device Personalities
 

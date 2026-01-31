@@ -1,8 +1,8 @@
 /**
- * Claude HTTP API Server
+ * Claude HTTP API Server (OpenRouter-ready)
  *
- * HTTP server that wraps Claude Code CLI with session management
- * Runs on the API server to handle voice interface queries
+ * Works on Windows, macOS, Linux. Use PowerShell or Bash to set:
+ * $env:OPENROUTER_API_KEY="sk-xxxx-your-key"
  *
  * Usage:
  *   node server.js
@@ -25,200 +25,30 @@ const {
   buildRepairPrompt,
 } = require('./structured');
 
+// Modern fetch for CommonJS in Node 22+
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+
 const app = express();
 const PORT = process.env.PORT || 3333;
 
-/**
- * Build the full environment that Claude Code expects
- * This mimics what happens when you run `claude` in a terminal
- * with your zsh profile fully loaded.
- */
-function buildClaudeEnvironment() {
-  const HOME = process.env.HOME || '/Users/networkchuck';
-  const PAI_DIR = path.join(HOME, '.claude');
+// ==== Load environment & API key ====
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-  // Load ~/.claude/.env (all API keys)
-  const envPath = path.join(PAI_DIR, '.env');
-  const paiEnv = {};
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    for (const line of envContent.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('#')) {
-        const [key, ...valueParts] = trimmed.split('=');
-        if (key && valueParts.length > 0) {
-          paiEnv[key] = valueParts.join('=');
-        }
-      }
-    }
-  }
-
-  // Build PATH like zsh profile does
-  const fullPath = [
-    '/opt/homebrew/bin',
-    '/opt/homebrew/opt/python@3.12/bin',
-    '/opt/homebrew/opt/libpq/bin',
-    path.join(HOME, '.bun/bin'),
-    path.join(HOME, '.local/bin'),
-    path.join(HOME, '.pyenv/bin'),
-    path.join(HOME, '.pyenv/shims'),
-    path.join(HOME, 'go/bin'),
-    '/usr/local/go/bin',
-    path.join(HOME, 'bin'),
-    path.join(HOME, '.lmstudio/bin'),
-    path.join(HOME, '.opencode/bin'),
-    '/usr/local/bin',
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin'
-  ].join(':');
-
-  const env = {
-    ...process.env,
-    ...paiEnv,
-    PATH: fullPath,
-    HOME,
-    PAI_DIR,
-    PAI_HOME: HOME,
-    DA: 'Morpheus',
-    DA_COLOR: 'purple',
-    GOROOT: '/usr/local/go',
-    GOPATH: path.join(HOME, 'go'),
-    PYENV_ROOT: path.join(HOME, '.pyenv'),
-    BUN_INSTALL: path.join(HOME, '.bun'),
-    // CRITICAL: These tell Claude Code it's running in the proper environment
-    CLAUDECODE: '1',
-    CLAUDE_CODE_ENTRYPOINT: 'cli',
-  };
-
-  // CRITICAL: Remove ANTHROPIC_API_KEY so Claude CLI uses subscription auth
-  // If ANTHROPIC_API_KEY is set (even to placeholder), CLI tries API auth instead
-  delete env.ANTHROPIC_API_KEY;
-
-  return env;
+if (!OPENROUTER_API_KEY) {
+  console.warn(
+    '[WARNING] OPENROUTER_API_KEY is not set. Set it in PowerShell: $env:OPENROUTER_API_KEY="sk-xxxx"'
+  );
 }
 
-// Pre-build the environment once at startup
-const claudeEnv = buildClaudeEnvironment();
-console.log('[STARTUP] Loaded environment with', Object.keys(claudeEnv).length, 'variables');
-console.log('[STARTUP] PATH includes:', claudeEnv.PATH.split(':').slice(0, 5).join(', '), '...');
-
-// Log which API keys are available (without showing values)
-const apiKeys = Object.keys(claudeEnv).filter(k =>
-  k.includes('API_KEY') || k.includes('TOKEN') || k.includes('SECRET') || k === 'PAI_DIR'
-);
-console.log('[STARTUP] API keys loaded:', apiKeys.join(', '));
-
-// Session storage: callId -> claudeSessionId
+// Session storage
 const sessions = new Map();
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'anthropic/claude-3.5-sonnet';
 
-// Model selection - Sonnet for balanced speed/quality
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
-
-function parseClaudeStdout(stdout) {
-  // Claude Code CLI may output JSONL; when it does, extract the `result` message.
-  // Otherwise, fall back to raw stdout.
-  let response = '';
-  let sessionId = null;
-
-  try {
-    const lines = String(stdout || '').trim().split('\n');
-    for (const line of lines) {
-      try {
-        const parsed = JSON.parse(line);
-        if (parsed.type === 'result' && parsed.result) {
-          response = parsed.result;
-          sessionId = parsed.session_id;
-        }
-      } catch {
-        // Not JSONL; ignore.
-      }
-    }
-
-    if (!response) response = String(stdout || '').trim();
-  } catch {
-    response = String(stdout || '').trim();
-  }
-
-  return { response, sessionId };
-}
-
-function runClaudeOnce({ fullPrompt, callId, timestamp }) {
-  const startTime = Date.now();
-
-  const args = [
-    '--dangerously-skip-permissions',
-    '-p', fullPrompt,
-    '--model', CLAUDE_MODEL
-  ];
-
-  if (callId) {
-    if (sessions.has(callId)) {
-      args.push('--resume', callId);
-      console.log(`[${timestamp}] Resuming session: ${callId}`);
-    } else {
-      args.push('--session-id', callId);
-      sessions.set(callId, true);
-      console.log(`[${timestamp}] Starting new session: ${callId}`);
-    }
-  }
-
-  return new Promise((resolve, reject) => {
-    const claude = spawn('claude', args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: false,
-      env: claudeEnv
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    claude.stdin.end();
-    claude.stdout.on('data', (data) => { stdout += data.toString(); });
-    claude.stderr.on('data', (data) => { stderr += data.toString(); });
-
-    claude.on('error', (error) => {
-      reject(error);
-    });
-
-    claude.on('close', (code) => {
-      const duration_ms = Date.now() - startTime;
-      resolve({ code, stdout, stderr, duration_ms });
-    });
-  });
-}
-
-/**
- * Voice Context - Prepended to all voice queries
- *
- * This tells Claude how to handle voice-specific patterns:
- * - Output VOICE_RESPONSE for TTS (conversational, 40 words max)
- * - Output COMPLETED for status logging (12 words max)
- * - For Slack delivery requests: do the work, send to Slack, then acknowledge
- */
+// Voice context
 const VOICE_CONTEXT = `[VOICE CALL CONTEXT]
-This query comes via voice call. You MUST include BOTH of these lines in your response:
-
-🗣️ VOICE_RESPONSE: [Your conversational answer in 40 words or less. This is what gets spoken aloud via TTS. Be natural and helpful, like talking to a friend.]
-
-🎯 COMPLETED: [Status summary in 12 words or less. This is for logging only.]
-
-IMPORTANT: The VOICE_RESPONSE line is what the caller HEARS. Make it conversational and complete - don't just say "Done" or "Task completed". Actually answer their question or confirm what you did in a natural way.
-
-SLACK DELIVERY: When the caller requests delivery to Slack (phrases like "send to Slack", "post to #channel", "message me when done"):
-1. Do the requested work (research, generate content, analyze, etc.)
-2. Send results to the specified Slack channel using the Slack skill
-3. Include a VOICE_RESPONSE like: "Done! I sent the weather info to the 508 channel."
-
-The caller may hang up while you're working (they'll hear hold music). That's fine - complete the work and send to Slack. They'll see it there.
-
-Example query: "What's the weather in Royce City?"
-Example response:
-🗣️ VOICE_RESPONSE: It's 65 degrees and partly cloudy in Royce City right now. Great weather for being outside!
-🎯 COMPLETED: Weather lookup for Royce City done.
+🗣️ VOICE_RESPONSE: Answer conversationally in 40 words max.
+🎯 COMPLETED: Status summary in 12 words max.
 [END VOICE CONTEXT]
-
 `;
 
 // Middleware
@@ -226,141 +56,67 @@ app.use(express.json());
 
 // Request logging
 app.use((req, res, next) => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.path}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
-/**
- * POST /ask
- *
- * Request body:
- *   {
- *     "prompt": "What Docker containers are running?",
- *     "callId": "optional-call-uuid",
- *     "devicePrompt": "optional device-specific prompt"
- *   }
- *
- * Response:
- *   { "success": true, "response": "...", "duration_ms": 1234, "sessionId": "..." }
- *
- * Session Management:
- *   - If callId is provided and we have a stored session, uses --resume
- *   - First query for a callId captures the session_id for future turns
- *   - This maintains conversation context across multiple turns in a phone call
- *
- * Device Prompts:
- *   - If devicePrompt is provided, it's prepended before VOICE_CONTEXT
- *   - This allows each device (NAS, Proxmox, etc.) to have its own identity and skills
- */
-app.post('/ask', async (req, res) => {
-  const { prompt, callId, devicePrompt } = req.body;
-  const startTime = Date.now();
-  const timestamp = new Date().toISOString();
-
-  if (!prompt) {
-    return res.status(400).json({
-      success: false,
-      error: 'Missing prompt in request body'
-    });
+// ==== Helpers ====
+async function runOpenRouterPrompt(prompt, callId) {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('Missing OPENROUTER_API_KEY');
   }
 
-  // Check if we have an existing session for this call
-  const existingSession = callId ? sessions.get(callId) : null;
+  const payload = {
+    model: CLAUDE_MODEL,
+    messages: [{ role: 'user', content: prompt }],
+  };
 
-  console.log(`[${timestamp}] QUERY: "${prompt.substring(0, 100)}..."`);
-  console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
-  console.log(`[${timestamp}] SESSION: callId=${callId || 'none'}, existing=${existingSession || 'none'}`);
-  console.log(`[${timestamp}] DEVICE PROMPT: ${devicePrompt ? 'Yes (' + devicePrompt.substring(0, 30) + '...)' : 'No'}`);
+  const response = await fetch('https://api.openrouter.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenRouter API error ${response.status}: ${errText}`);
+  }
+
+  const data = await response.json();
+
+  // OpenRouter response format
+  const result = data?.choices?.[0]?.message?.content || '';
+  return { response: result, sessionId: callId || null };
+}
+
+// ==== Routes ====
+app.post('/ask', async (req, res) => {
+  const { prompt, callId, devicePrompt } = req.body || {};
+  if (!prompt) return res.status(400).json({ success: false, error: 'Missing prompt' });
+
+  let fullPrompt = '';
+  if (devicePrompt) fullPrompt += `[DEVICE]\n${devicePrompt}\n[END DEVICE]\n\n`;
+  fullPrompt += VOICE_CONTEXT + prompt;
 
   try {
-    /**
-     * Prompt layering order:
-     * 1. Device prompt (if provided) - identity and available skills
-     * 2. VOICE_CONTEXT - general voice call instructions
-     * 3. User's prompt - what they actually said
-     */
-    let fullPrompt = '';
+    const { response, sessionId } = await runOpenRouterPrompt(fullPrompt, callId);
 
-    if (devicePrompt) {
-      fullPrompt += `[DEVICE IDENTITY]\n${devicePrompt}\n[END DEVICE IDENTITY]\n\n`;
-    }
+    if (sessionId && callId) sessions.set(callId, sessionId);
 
-    fullPrompt += VOICE_CONTEXT;
-    fullPrompt += prompt;
-
-    const { code, stdout, stderr, duration_ms } = await runClaudeOnce({ fullPrompt, callId, timestamp });
-
-    if (code !== 0) {
-      console.error(`[${new Date().toISOString()}] ERROR: Claude CLI exited with code ${code}`);
-      console.error(`STDERR: ${stderr}`);
-      console.error(`STDOUT: ${stdout.substring(0, 500)}`);
-      const errorMsg = stderr || stdout || `Exit code ${code}`;
-      return res.json({ success: false, error: `Claude CLI failed: ${errorMsg}`, duration_ms });
-    }
-
-    const { response, sessionId } = parseClaudeStdout(stdout);
-
-    if (sessionId && callId) {
-      sessions.set(callId, sessionId);
-      console.log(`[${new Date().toISOString()}] SESSION STORED: ${callId} -> ${sessionId}`);
-    }
-
-    console.log(`[${new Date().toISOString()}] RESPONSE (${duration_ms}ms): "${response.substring(0, 100)}..."`);
-
-    res.json({ success: true, response, sessionId, duration_ms });
-
-  } catch (error) {
-    const duration_ms = Date.now() - startTime;
-    console.error(`[${timestamp}] ERROR:`, error.message);
-
-    res.json({
-      success: false,
-      error: error.message,
-      duration_ms
-    });
+    res.json({ success: true, response, sessionId });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
   }
 });
 
-/**
- * POST /ask-structured
- *
- * Like /ask, but returns machine-validated JSON for n8n automations.
- *
- * Request body:
- *   {
- *     "prompt": "Check Ceph health",
- *     "callId": "optional-call-uuid",
- *     "devicePrompt": "optional device-specific prompt",
- *     "schema": {
- *        "queryType": "ceph_health",
- *        "requiredFields": ["cluster_status","ssd_usage_percent","recommendation"],
- *        "fieldGuidance": { "cluster_status": "Ceph overall health, e.g. HEALTH_OK/HEALTH_WARN/HEALTH_ERR" },
- *        "allowExtraFields": true,
- *        "example": { "cluster_status": "HEALTH_WARN", "ssd_usage_percent": 88, "recommendation": "alert" }
- *     },
- *     "includeVoiceContext": false,
- *     "maxRetries": 1
- *   }
- *
- * Response (success):
- *   { "success": true, "data": {...}, "raw_response": "...", "duration_ms": 1234 }
- */
 app.post('/ask-structured', async (req, res) => {
-  const {
-    prompt,
-    callId,
-    devicePrompt,
-    schema = {},
-    includeVoiceContext = false,
-    maxRetries = 1,
-  } = req.body || {};
+  const { prompt, callId, devicePrompt, schema = {}, includeVoiceContext = false, maxRetries = 1 } =
+    req.body || {};
 
-  const timestamp = new Date().toISOString();
-
-  if (!prompt) {
-    return res.status(400).json({ success: false, error: 'Missing prompt in request body' });
-  }
+  if (!prompt) return res.status(400).json({ success: false, error: 'Missing prompt' });
 
   const queryContext = buildQueryContext({
     queryType: schema.queryType,
@@ -372,159 +128,64 @@ app.post('/ask-structured', async (req, res) => {
 
   let fullPrompt = buildStructuredPrompt({
     devicePrompt,
-    queryContext: (includeVoiceContext ? VOICE_CONTEXT : '') + queryContext,
+    queryContext: includeVoiceContext ? VOICE_CONTEXT + queryContext : queryContext,
     userPrompt: prompt,
   });
 
-  console.log(`[${timestamp}] STRUCTURED QUERY: "${String(prompt).substring(0, 100)}..."`);
-  console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
-  console.log(`[${timestamp}] SESSION: callId=${callId || 'none'}, existing=${callId ? (sessions.has(callId) ? 'yes' : 'no') : 'none'}`);
-
   try {
-    let lastRaw = '';
-    let lastError = 'Unknown error';
-    let totalDuration = 0;
-    const retries = Number.isFinite(Number(maxRetries)) ? Number(maxRetries) : 0;
-    let attemptsMade = 0;
+    const { response, sessionId } = await runOpenRouterPrompt(fullPrompt, callId);
+    if (sessionId && callId) sessions.set(callId, sessionId);
 
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      attemptsMade = attempt + 1;
-      const { code, stdout, stderr, duration_ms } = await runClaudeOnce({ fullPrompt, callId, timestamp });
-      totalDuration += duration_ms;
+    const parsed = tryParseJsonFromText(response);
+    if (!parsed.ok) throw new Error(parsed.error || 'Failed to parse JSON');
 
-      if (code !== 0) {
-        lastError = `Claude CLI failed: ${stderr}`;
-        lastRaw = String(stdout || '').trim();
-        return res.status(502).json({
-          success: false,
-          error: lastError,
-          raw_response: lastRaw,
-          duration_ms: totalDuration,
-          attempts: attemptsMade,
-        });
-      }
+    const validation = validateRequiredFields(parsed.data, schema.requiredFields);
+    if (!validation.ok) throw new Error(validation.error || 'Validation failed');
 
-      const { response, sessionId } = parseClaudeStdout(stdout);
-      lastRaw = response;
-
-      if (sessionId && callId) sessions.set(callId, sessionId);
-
-      const parsed = tryParseJsonFromText(response);
-      if (!parsed.ok) {
-        lastError = parsed.error || 'Failed to parse JSON';
-      } else {
-        const validation = validateRequiredFields(parsed.data, schema.requiredFields);
-        if (validation.ok) {
-          return res.json({
-            success: true,
-            data: parsed.data,
-            json_text: parsed.jsonText,
-            raw_response: response,
-            duration_ms: totalDuration,
-            attempts: attemptsMade,
-          });
-        }
-        lastError = validation.error || 'Validation failed';
-      }
-
-      if (attempt >= retries) break;
-
-      // Retry once with a repair prompt that forces "JSON only" formatting.
-      const repairPrompt = buildRepairPrompt({
-        queryType: schema.queryType,
-        requiredFields: schema.requiredFields,
-        fieldGuidance: schema.fieldGuidance,
-        allowExtraFields: schema.allowExtraFields !== false,
-        originalUserPrompt: prompt,
-        invalidAssistantOutput: lastRaw,
-        example: schema.example,
-      });
-
-      fullPrompt = buildStructuredPrompt({
-        devicePrompt,
-        queryContext: includeVoiceContext ? VOICE_CONTEXT : '',
-        userPrompt: repairPrompt,
-      });
-    }
-
-    return res.status(422).json({
-      success: false,
-      error: lastError,
-      raw_response: lastRaw,
-      duration_ms: totalDuration,
-      attempts: attemptsMade,
+    res.json({
+      success: true,
+      data: parsed.data,
+      raw_response: response,
+      sessionId,
     });
-  } catch (error) {
-    console.error(`[${timestamp}] ERROR:`, error.message);
-    return res.status(500).json({ success: false, error: error.message });
+  } catch (err) {
+    res.json({ success: false, error: err.message, raw_response: fullPrompt });
   }
 });
 
-/**
- * POST /end-session
- *
- * Clean up session when a call ends
- *
- * Request body:
- *   { "callId": "call-uuid" }
- */
 app.post('/end-session', (req, res) => {
   const { callId } = req.body;
-  const timestamp = new Date().toISOString();
-
-  if (callId && sessions.has(callId)) {
-    sessions.delete(callId);
-    console.log(`[${timestamp}] SESSION ENDED: ${callId}`);
-  }
-
+  if (callId && sessions.has(callId)) sessions.delete(callId);
   res.json({ success: true });
 });
 
-/**
- * GET /health
- * Health check endpoint
- */
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'claude-api-server',
-    timestamp: new Date().toISOString()
+    service: 'openrouter-api-server',
+    model: CLAUDE_MODEL,
+    timestamp: new Date().toISOString(),
   });
 });
 
-/**
- * GET /
- * Info endpoint
- */
 app.get('/', (req, res) => {
   res.json({
-    service: 'Claude HTTP API Server',
+    service: 'Claude HTTP API Server (OpenRouter)',
     version: '1.0.0',
     endpoints: {
       'POST /ask': 'Send a prompt to Claude',
-      'POST /ask-structured': 'Send a prompt and return validated JSON (n8n)',
-      'GET /health': 'Health check'
-    }
+      'POST /ask-structured': 'Send a prompt and return validated JSON',
+      'POST /end-session': 'End session',
+      'GET /health': 'Health check',
+    },
   });
 });
 
-// Start server
+// ==== Start Server ====
 app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(64));
-  console.log('Claude HTTP API Server');
+  console.log('Claude HTTP API Server (OpenRouter)');
   console.log('='.repeat(64));
-  console.log(`\nListening on: http://0.0.0.0:${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log('\nReady to receive Claude queries from voice interface.\n');
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('\nReceived SIGTERM, shutting down gracefully...');
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('\nReceived SIGINT, shutting down gracefully...');
-  process.exit(0);
+  console.log(`Listening on: http://0.0.0.0:${PORT}`);
+  console.log('Ready to receive Claude queries.');
 });

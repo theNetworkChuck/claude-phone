@@ -58,11 +58,11 @@ export async function validateElevenLabsKey(apiKey) {
 }
 
 /**
- * Validate OpenAI API key by making a test request
- * @param {string} apiKey - OpenAI API key
+ * Validate Gemini API key by making a test request
+ * @param {string} apiKey - Gemini API key
  * @returns {Promise<{valid: boolean, error?: string}>} Validation result
  */
-export async function validateOpenAIKey(apiKey) {
+export async function validateGeminiKey(apiKey) {
   if (!apiKey || apiKey.trim() === '') {
     return {
       valid: false,
@@ -71,10 +71,13 @@ export async function validateOpenAIKey(apiKey) {
   }
 
   try {
-    const response = await axios.get('https://api.openai.com/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      },
+    const response = await axios.post('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+      contents: [{
+        parts: [{
+          text: "Say 'ok'"
+        }]
+      }]
+    }, {
       timeout: 10000
     });
 

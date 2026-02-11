@@ -12,7 +12,7 @@ import {
 } from '../config.js';
 import {
   validateElevenLabsKey,
-  validateOpenAIKey,
+  validateGeminiKey,
   validateVoiceId,
   validateExtension,
   validateIP,
@@ -457,7 +457,7 @@ async function setupPi(config) {
   if (config.deployment && config.deployment.mode === 'standard') {
     console.log(chalk.yellow('\n⚠️  Detected existing standard configuration'));
     console.log(chalk.gray('Your config will be migrated to Pi split-mode while preserving:'));
-    console.log(chalk.gray('  • API keys (ElevenLabs, OpenAI)'));
+    console.log(chalk.gray('  • API keys (ElevenLabs, Gemini)'));
     console.log(chalk.gray('  • Device configurations'));
     console.log(chalk.gray('  • SIP settings\n'));
 
@@ -670,7 +670,8 @@ function createDefaultConfig() {
     version: '1.0.0',
     api: {
       elevenlabs: { apiKey: '', defaultVoiceId: '', validated: false },
-      openai: { apiKey: '', validated: false }
+      gemini: { apiKey: '', validated: false },
+      google: { credentialsPath: '', projectId: '' }
     },
     sip: {
       domain: '',
@@ -784,13 +785,13 @@ async function setupAPIKeys(config) {
     config.api.elevenlabs.defaultVoiceId = defaultVoiceId;
   }
 
-  // OpenAI API Key
-  const openAIAnswers = await inquirer.prompt([
+  // Gemini API Key (for LLM)
+  const geminiAnswers = await inquirer.prompt([
     {
       type: 'password',
       name: 'apiKey',
-      message: 'OpenAI API key (for Whisper STT):',
-      default: config.api.openai.apiKey,
+      message: 'Gemini API key (for LLM):',
+      default: config.api.gemini.apiKey,
       validate: (input) => {
         if (!input || input.trim() === '') {
           return 'API key is required';
@@ -800,12 +801,12 @@ async function setupAPIKeys(config) {
     }
   ]);
 
-  const openAIKey = openAIAnswers.apiKey;
-  const openAISpinner = ora('Validating OpenAI API key...').start();
+  const geminiKey = geminiAnswers.apiKey;
+  const geminiSpinner = ora('Validating Gemini API key...').start();
 
-  const openAIResult = await validateOpenAIKey(openAIKey);
-  if (!openAIResult.valid) {
-    openAISpinner.fail(`Invalid OpenAI API key: ${openAIResult.error}`);
+  const geminiResult = await validateGeminiKey(geminiKey);
+  if (!geminiResult.valid) {
+    geminiSpinner.fail(`Invalid Gemini API key: ${geminiResult.error}`);
     console.log(chalk.yellow('\n⚠️  You can continue setup, but the key may not work.'));
     const { continueAnyway } = await inquirer.prompt([
       {
@@ -820,10 +821,10 @@ async function setupAPIKeys(config) {
       throw new Error('Setup cancelled due to invalid API key');
     }
 
-    config.api.openai = { apiKey: openAIKey, validated: false };
+    config.api.gemini = { apiKey: geminiKey, validated: false };
   } else {
-    openAISpinner.succeed('OpenAI API key validated');
-    config.api.openai = { apiKey: openAIKey, validated: true };
+    geminiSpinner.succeed('Gemini API key validated');
+    config.api.gemini = { apiKey: geminiKey, validated: true };
   }
 
   return config;

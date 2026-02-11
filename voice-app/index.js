@@ -15,8 +15,8 @@ var AudioForkServer = require("./lib/audio-fork").AudioForkServer;
 var sipHandler = require("./lib/sip-handler");
 var handleInvite = sipHandler.handleInvite;
 var extractCallerId = sipHandler.extractCallerId;
-var whisperClient = require("./lib/whisper-client");
-var claudeBridge = require("./lib/claude-bridge");
+var speechClient = require("./lib/google-speech-client");
+var geminiBridge = require("./lib/gemini-bridge");
 var ttsService = require("./lib/tts-service");
 
 // Multi-extension support
@@ -201,8 +201,8 @@ function initializeServers() {
     mediaServer: mediaServer,
     deviceRegistry: deviceRegistry,  // Required for device lookup
     audioForkServer: audioForkServer,
-    whisperClient: whisperClient,
-    claudeBridge: claudeBridge,
+    speechClient: speechClient,
+    geminiBridge: geminiBridge,
     ttsService: ttsService,
     wsPort: config.ws_port
   });
@@ -212,7 +212,7 @@ function initializeServers() {
 
   // ========== QUERY API ROUTES ==========
   setupQueryRoutes({
-    claudeBridge: claudeBridge
+    geminiBridge: geminiBridge
   });
 
   httpServer.app.use("/api", queryRouter);
@@ -243,8 +243,8 @@ function checkReadyState() {
         mediaServer: mediaServer,
         deviceRegistry: deviceRegistry,
         config: config,
-        whisperClient: whisperClient,
-        claudeBridge: claudeBridge,
+        speechClient: speechClient,
+        geminiBridge: geminiBridge,
         ttsService: ttsService,
         wsPort: config.ws_port,
         externalIp: config.external_ip

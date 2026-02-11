@@ -17,8 +17,8 @@ var srf = null;
 var mediaServer = null;
 var deviceRegistry = null;
 var audioForkServer = null;
-var whisperClient = null;
-var claudeBridge = null;
+var speechClient = null;
+var geminiBridge = null;
 var ttsService = null;
 var wsPort = 3001;
 
@@ -164,11 +164,11 @@ router.post('/outbound-call', async function(req, res) {
 
     // For conversation mode, check additional dependencies
     if (mode === 'conversation') {
-      if (!audioForkServer || !whisperClient || !claudeBridge || !ttsService) {
+      if (!audioForkServer || !speechClient || !geminiBridge || !ttsService) {
         logger.error('Conversation mode dependencies not ready', {
           audioForkServer: !!audioForkServer,
-          whisperClient: !!whisperClient,
-          claudeBridge: !!claudeBridge,
+          speechClient: !!speechClient,
+          geminiBridge: !!geminiBridge,
           ttsService: !!ttsService
         });
 
@@ -249,8 +249,8 @@ router.post('/outbound-call', async function(req, res) {
           try {
             await runConversationLoop(endpoint, dialog, callId, {
               audioForkServer: audioForkServer,
-              whisperClient: whisperClient,
-              claudeBridge: claudeBridge,
+              speechClient: speechClient,
+              geminiBridge: geminiBridge,
               ttsService: ttsService,
               wsPort: wsPort,
               deviceConfig: deviceConfig,
@@ -391,12 +391,12 @@ function setupRoutes(deps) {
   mediaServer = deps.mediaServer;
   deviceRegistry = deps.deviceRegistry || null;
   audioForkServer = deps.audioForkServer || null;
-  whisperClient = deps.whisperClient || null;
-  claudeBridge = deps.claudeBridge || null;
+  speechClient = deps.speechClient || null;
+  geminiBridge = deps.geminiBridge || null;
   ttsService = deps.ttsService || null;
   wsPort = deps.wsPort || 3001;
 
-  var conversationReady = !!(audioForkServer && whisperClient && claudeBridge && ttsService);
+  var conversationReady = !!(audioForkServer && speechClient && geminiBridge && ttsService);
 
   logger.info('Outbound routes initialized', {
     srf: !!srf,

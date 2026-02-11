@@ -93,9 +93,10 @@ Key environment variables in the generated `.env`:
 | Variable | Purpose |
 |----------|---------|
 | `EXTERNAL_IP` | Server LAN IP for RTP routing |
-| `CLAUDE_API_URL` | URL to claude-api-server |
+| `CLAUDE_API_URL` | URL to API server |
 | `ELEVENLABS_API_KEY` | TTS API key |
-| `OPENAI_API_KEY` | Whisper STT API key |
+| `GEMINI_API_KEY` | Gemini LLM API key |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Google Cloud Speech-to-Text credentials |
 | `SIP_DOMAIN` | 3CX server FQDN |
 | `SIP_REGISTRAR` | SIP registrar address |
 

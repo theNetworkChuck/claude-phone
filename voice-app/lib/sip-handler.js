@@ -109,7 +109,7 @@ function extractVoiceLine(response) {
  * @param {Object} deviceConfig - Device configuration (name, prompt, voiceId, etc.) or null for default
  */
 async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfig) {
-  const { ttsService, whisperClient, claudeBridge, wsPort, audioForkServer } = options;
+  const { ttsService, speechClient, geminiBridge, wsPort, audioForkServer } = options;
 
   let session = null;
   let forkRunning = false;
@@ -185,12 +185,12 @@ async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfi
       }
 
       // Transcribe
-      const transcript = await whisperClient.transcribe(utterance.audio, {
+      const transcript = await speechClient.transcribe(utterance.audio, {
         format: 'pcm',
         sampleRate: 16000
       });
 
-      console.log('[' + new Date().toISOString() + '] WHISPER: "' + transcript + '"');
+      console.log('[' + new Date().toISOString() + '] SPEECH: "' + transcript + '"');
 
       if (!transcript || transcript.trim().length < 2) {
         const clarifyUrl = await ttsService.generateSpeech("Sorry, I didn't catch that. Could you repeat?", voiceId);
@@ -217,9 +217,9 @@ async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfi
       });
       musicPlaying = true;
 
-      // Query Claude with device-specific prompt
-      console.log('[' + new Date().toISOString() + '] CLAUDE Querying (device: ' + deviceName + ')...');
-      const claudeResponse = await claudeBridge.query(
+      // Query Gemini with device-specific prompt
+      console.log('[' + new Date().toISOString() + '] GEMINI Querying (device: ' + deviceName + ')...');
+      const geminiResponse = await geminiBridge.query(
         transcript,
         { callId: callUuid, devicePrompt: devicePrompt }
       );
@@ -231,10 +231,10 @@ async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfi
         } catch (e) {}
       }
 
-      console.log('[' + new Date().toISOString() + '] CLAUDE Response received');
+      console.log('[' + new Date().toISOString() + '] GEMINI Response received');
 
       // Extract and play voice line with device voice
-      const voiceLine = extractVoiceLine(claudeResponse);
+      const voiceLine = extractVoiceLine(geminiResponse);
       console.log('[' + new Date().toISOString() + '] VOICE: "' + voiceLine + '"');
 
       const responseUrl = await ttsService.generateSpeech(voiceLine, voiceId);
@@ -259,7 +259,7 @@ async function conversationLoop(endpoint, dialog, callUuid, options, deviceConfi
     console.log('[' + new Date().toISOString() + '] CONVERSATION Cleanup...');
 
     try {
-      await claudeBridge.endSession(callUuid);
+      await geminiBridge.endSession(callUuid);
     } catch (e) {}
 
     if (forkRunning) {

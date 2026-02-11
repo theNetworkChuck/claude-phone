@@ -52,7 +52,7 @@ function isGoodbye(transcript) {
 }
 
 /**
- * Extract voice-friendly line from Claude's response
+ * Extract voice-friendly line from Gemini's response
  * Priority: VOICE_RESPONSE > CUSTOM COMPLETED > COMPLETED > first sentence
  */
 function extractVoiceLine(response) {
@@ -115,8 +115,8 @@ function extractVoiceLine(response) {
  * @param {string} callUuid - Unique call identifier
  * @param {Object} options - Configuration options
  * @param {Object} options.audioForkServer - WebSocket audio fork server
- * @param {Object} options.whisperClient - Whisper transcription client
- * @param {Object} options.claudeBridge - Claude API bridge
+ * @param {Object} options.speechClient - Google Cloud Speech transcription client
+ * @param {Object} options.geminiBridge - Gemini API bridge
  * @param {Object} options.ttsService - TTS service
  * @param {number} options.wsPort - WebSocket port
  * @param {string} [options.initialContext] - Context for outbound calls (why we're calling)
@@ -127,8 +127,8 @@ function extractVoiceLine(response) {
 async function runConversationLoop(endpoint, dialog, callUuid, options) {
   const {
     audioForkServer,
-    whisperClient,
-    claudeBridge,
+    speechClient,
+    geminiBridge,
     ttsService,
     wsPort,
     initialContext = null,
@@ -170,11 +170,11 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       await endpoint.play(greetingUrl);
     }
 
-    // Prime Claude with context if this is an outbound call (NON-BLOCKING)
+    // Prime Gemini with context if this is an outbound call (NON-BLOCKING)
     // Fire-and-forget: we don't use the response, just establishing session context
     if (initialContext && callActive) {
-      logger.info('Priming Claude with outbound context (non-blocking)', { callUuid });
-      claudeBridge.query(
+      logger.info('Priming Gemini with outbound context (non-blocking)', { callUuid });
+      geminiBridge.query(
         `[SYSTEM CONTEXT - DO NOT REPEAT]: You just called the user to tell them: "${initialContext}". They have answered. Now listen to their response and help them.`,
         { callId: callUuid, devicePrompt: devicePrompt, isSystemPrime: true }
       ).catch(err => logger.warn('Prime query failed', { callUuid, error: err.message }));
@@ -308,7 +308,7 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       }
 
       // Transcribe
-      const transcript = await whisperClient.transcribe(utterance.audio, {
+      const transcript = await speechClient.transcribe(utterance.audio, {
         format: 'pcm',
         sampleRate: 16000
       });
@@ -354,9 +354,9 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
         musicPlaying = true;
       }
 
-      // 3. Query Claude
-      logger.info('Querying Claude', { callUuid });
-      const claudeResponse = await claudeBridge.query(
+      // 3. Query Gemini
+      logger.info('Querying Gemini', { callUuid });
+      const geminiResponse = await geminiBridge.query(
         transcript,
         { callId: callUuid, devicePrompt: devicePrompt }
       );
@@ -376,10 +376,10 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
         break;
       }
 
-      logger.info('Claude responded', { callUuid });
+      logger.info('Gemini responded', { callUuid });
 
       // 5. Extract and play voice line
-      const voiceLine = extractVoiceLine(claudeResponse);
+      const voiceLine = extractVoiceLine(geminiResponse);
       logger.info('Voice line', { callUuid, voiceLine });
 
       const responseUrl = await ttsService.generateSpeech(voiceLine, voiceId);
@@ -431,9 +431,9 @@ async function runConversationLoop(endpoint, dialog, callUuid, options) {
       audioForkServer.cancelExpectation(callUuid);
     }
 
-    // End Claude session
+    // End Gemini session
     try {
-      await claudeBridge.endSession(callUuid);
+      await geminiBridge.endSession(callUuid);
     } catch (e) {
       // Ignore
     }

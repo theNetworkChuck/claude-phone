@@ -1,6 +1,6 @@
 /**
  * Query API Routes
- * Express routes for programmatic Claude queries from n8n or other systems
+ * Express routes for programmatic Gemini queries from n8n or other systems
  * Supports both text and structured JSON responses with device-specific context
  *
  * v2: Uses /ask-structured for JSON format, proper callId for skills access
@@ -14,13 +14,13 @@ const logger = require('./logger');
 const deviceRegistry = require('./device-registry');
 
 // Dependencies injected via setupRoutes()
-let claudeBridge = null;
+let geminiBridge = null;
 
-// Claude API server URL (same as used by claudeBridge)
+// Gemini API server URL (same as used by geminiBridge)
 const CLAUDE_API_URL = process.env.CLAUDE_API_URL || 'http://localhost:3333';
 
 /**
- * Extract voice-friendly line from Claude response
+ * Extract voice-friendly line from Gemini response
  * Copied from conversation-loop.js for consistency
  */
 function extractVoiceLine(response) {
@@ -294,19 +294,19 @@ router.post('/query', async (req, res) => {
         });
       }
     } else {
-      // Use /ask endpoint for text format (via claudeBridge)
-      // Check if Claude bridge is available
-      if (!claudeBridge) {
-        logger.error('Claude bridge not available');
+      // Use /ask endpoint for text format (via geminiBridge)
+      // Check if Gemini bridge is available
+      if (!geminiBridge) {
+        logger.error('Gemini bridge not available');
 
         return res.status(503).json({
           success: false,
           error: 'service_unavailable',
-          message: 'Claude API is not ready'
+          message: 'Gemini API is not ready'
         });
       }
 
-      response = await claudeBridge.query(fullPrompt, {
+      response = await geminiBridge.query(fullPrompt, {
         callId,
         devicePrompt,
         timeout
@@ -468,13 +468,13 @@ router.get('/device/:identifier', (req, res) => {
  * Setup routes with dependencies
  *
  * @param {Object} deps - Dependencies
- * @param {Object} deps.claudeBridge - Claude API bridge
+ * @param {Object} deps.geminiBridge - Gemini API bridge
  */
 function setupRoutes(deps) {
-  claudeBridge = deps.claudeBridge;
+  geminiBridge = deps.geminiBridge;
 
   logger.info('Query routes initialized', {
-    claudeBridge: !!claudeBridge
+    geminiBridge: !!geminiBridge
   });
 }
 

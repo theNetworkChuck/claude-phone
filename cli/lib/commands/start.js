@@ -95,7 +95,7 @@ async function startApiServer(config) {
   const spinner = ora('Starting API server...').start();
   try {
     if (await isServerRunning()) {
-      spinner.warn('Claude API server already running');
+      spinner.warn('API server already running');
     } else {
       await startServer(config.paths.claudeApiServer, config.server.claudeApiPort, null, { AI_BACKEND: backend });
       spinner.succeed(`API server started on port ${config.server.claudeApiPort} (backend: ${backend})`);
@@ -243,10 +243,18 @@ async function startBoth(config, isPiMode) {
     }
   }
 
-  // Check Claude CLI only in standard mode (Pi mode connects to API server instead)
-  if (!isPiMode && !(await isClaudeInstalled())) {
-    console.log(chalk.yellow('⚠️  Claude CLI not found'));
-    console.log(chalk.gray('  Install from: https://claude.com/download\n'));
+  // Check assistant CLI only in standard mode (Pi mode connects to API server instead)
+  if (!isPiMode) {
+    const backend = config.server?.assistantCli || 'claude';
+    if (!(await isAssistantCliInstalled(backend))) {
+      console.log(chalk.yellow(`⚠️  ${backend === 'codex' ? 'Codex' : 'Claude'} CLI not found`));
+      if (backend === 'codex') {
+        console.log(chalk.gray('  Install: npm install -g @openai/codex'));
+        console.log(chalk.gray('  Or: brew install --cask codex\n'));
+      } else {
+        console.log(chalk.gray('  Install from: https://claude.com/download\n'));
+      }
+    }
   }
 
   // In Pi mode, verify API server is reachable

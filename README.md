@@ -20,7 +20,9 @@ Claude Phone gives your Claude Code installation a phone number. You can:
 | **3CX Cloud Account** | [3cx.com](https://www.3cx.com/) | Free tier works |
 | **ElevenLabs API Key** | [elevenlabs.io](https://elevenlabs.io/) | For text-to-speech |
 | **OpenAI API Key** | [platform.openai.com](https://platform.openai.com/) | For Whisper speech-to-text |
-| **Claude Code CLI** | [claude.ai/code](https://claude.ai/code) | Requires Claude Max subscription |
+| **Assistant CLI (choose one)** |  | Used by the API server backend |
+| Claude Code CLI | [claude.ai/code](https://claude.ai/code) | Requires Claude subscription |
+| OpenAI Codex CLI | [developers.openai.com/codex](https://developers.openai.com/codex) | Install with `npm i -g @openai/codex` or `brew install --cask codex` |
 
 ## Platform Support
 
@@ -112,8 +114,8 @@ Best for: Dedicated Pi for voice services, Claude running on your main machine.
 │         ↓                                                    │
 │  ┌─────────────┐         ┌─────────────────────┐           │
 │  │ Raspberry Pi │   ←→   │ Mac/Linux with      │           │
-│  │ (voice-app)  │  HTTP  │ Claude Code CLI     │           │
-│  └─────────────┘         │ (claude-api-server) │           │
+│  │ (voice-app)  │  HTTP  │ Assistant CLI       │           │
+│  └─────────────┘         │ (Claude or Codex)   │           │
 │                          └─────────────────────┘           │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -126,7 +128,8 @@ claude-phone start    # Launches Docker containers
 
 **On your Mac/Linux (API Server):**
 ```bash
-claude-phone api-server    # Starts Claude API wrapper on port 3333
+claude-phone api-server                 # Backend defaults to Claude
+claude-phone api-server --backend codex # Wrap Codex CLI instead
 ```
 
 Note: On the API server machine, you don't need to run `claude-phone setup` first - the `api-server` command works standalone.
@@ -140,7 +143,7 @@ Note: On the API server machine, you don't need to run `claude-phone setup` firs
 | `claude-phone stop` | Stop all services |
 | `claude-phone status` | Show service status |
 | `claude-phone doctor` | Health check for dependencies and services |
-| `claude-phone api-server [--port N]` | Start API server standalone (default: 3333) |
+| `claude-phone api-server [--port N] [--backend claude|codex]` | Start API server standalone (default: 3333) |
 | `claude-phone device add` | Add a new device/extension |
 | `claude-phone device list` | List configured devices |
 | `claude-phone device remove <name>` | Remove a device |

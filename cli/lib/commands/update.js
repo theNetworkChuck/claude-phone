@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { execSync } from 'child_process';
-import { loadConfig, saveConfig, configExists } from '../config.js';
+import { loadConfig, saveConfig, configExists, getConfigDir } from '../config.js';
 
 /**
  * Check for git repository
@@ -157,7 +157,7 @@ function showManualInstructions(release) {
   console.log(chalk.bold('   claude-phone stop\n'));
 
   console.log(chalk.gray('2. Backup your configuration:'));
-  console.log(chalk.bold('   cp ~/.claude-phone/config.json ~/config.json.backup\n'));
+  console.log(chalk.bold('   cp $(claude-phone config path) ~/config.json.backup\n'));
 
   console.log(chalk.gray('3. Run the installer:'));
   console.log(chalk.bold('   curl -sSL https://raw.githubusercontent.com/theNetworkChuck/claude-phone/main/install.sh | bash\n'));
@@ -181,7 +181,8 @@ export async function updateCommand() {
   if (configExists()) {
     console.log(chalk.gray('Backing up configuration...'));
     const config = await loadConfig();
-    const backupPath = `${process.env.HOME}/.claude-phone/config.json.pre-update`;
+    const configDir = getConfigDir();
+    const backupPath = `${configDir}/config.json.pre-update`;
     await saveConfig(config); // This creates a backup automatically
     console.log(chalk.green(`✓ Config backed up to: ${backupPath}`));
   }

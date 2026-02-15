@@ -1,17 +1,17 @@
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import chalk from 'chalk';
 import { checkNode } from '../checks/node.js';
 import { checkDocker } from '../checks/docker.js';
 import { checkCompose } from '../checks/compose.js';
+import { getConfigDir } from '../../config.js';
 
 /**
  * Get state file path
  * @returns {string} Path to state file
  */
 function getStateFile() {
-  const configDir = path.join(os.homedir(), '.claude-phone');
+  const configDir = getConfigDir();
 
   // Ensure config directory exists
   if (!fs.existsSync(configDir)) {

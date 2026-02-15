@@ -13,20 +13,27 @@ import { savePid, removePid } from '../process-manager.js';
  * @returns {Promise<void>}
  */
 export async function apiServerCommand(options = {}) {
-  console.log(chalk.bold.cyan('\n🤖 Claude API Server\n'));
+  console.log(chalk.bold.cyan('\n🤖 API Server\n'));
 
   // Load config to get port if not provided
   let port = options.port;
+  let backend = options.backend;
   if (!port && configExists()) {
     const config = await loadConfig();
     port = config.server?.claudeApiPort || 3333;
+    backend = backend || config.server?.assistantCli || 'claude';
   }
   if (!port) {
     port = 3333; // Final fallback
   }
+  backend = String(backend || process.env.AI_BACKEND || 'claude').trim().toLowerCase();
+  if (!['claude', 'codex'].includes(backend)) {
+    throw new Error(`Invalid backend "${backend}". Use "claude" or "codex".`);
+  }
 
   console.log(chalk.gray(`Starting API server on port ${port}...`));
-  console.log(chalk.gray('This wraps Claude Code CLI for Pi connections.\n'));
+  console.log(chalk.gray(`Backend: ${backend}`));
+  console.log(chalk.gray('This wraps your local assistant CLI for Pi connections.\n'));
 
   const projectRoot = getProjectRoot();
   const serverPath = path.join(projectRoot, 'claude-api-server', 'server.js');
@@ -37,7 +44,8 @@ export async function apiServerCommand(options = {}) {
     const child = spawn('node', [serverPath], {
       env: {
         ...process.env,
-        PORT: port.toString()
+        PORT: port.toString(),
+        AI_BACKEND: backend
       },
       stdio: 'inherit'
     });

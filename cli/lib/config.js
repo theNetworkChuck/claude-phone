@@ -52,6 +52,10 @@ export async function loadConfig() {
   }
   if (!config.server) config.server = {};
   if (!config.server.assistantCli) config.server.assistantCli = 'claude';
+  if (config.server.assistantCli === 'chatgpt') {
+    // Backward compatibility: legacy backend key renamed to "openai".
+    config.server.assistantCli = 'openai';
+  }
 
   return config;
 }

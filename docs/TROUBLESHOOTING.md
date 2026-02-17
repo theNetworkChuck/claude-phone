@@ -182,7 +182,7 @@ claude-phone start
    # If backend is codex:
    codex --version
 
-   # If backend is chatgpt:
+   # If backend is openai:
    # Ensure OPENAI_API_KEY is set and valid
    ```
 
@@ -262,7 +262,7 @@ claude-phone config show | grep claudeApiUrl
    curl http://localhost:3333/health
    # backend=claude  -> claude --version
    # backend=codex   -> codex --version
-   # backend=chatgpt -> OPENAI_API_KEY must be set
+   # backend=openai  -> OPENAI_API_KEY must be set
    ```
 
 3. Check for Node.js errors in output

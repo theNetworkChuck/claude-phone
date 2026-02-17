@@ -4,7 +4,7 @@
 
 # Claude Phone
 
-Voice interface for assistant backends (Claude, Codex, or ChatGPT) via SIP/3CX. Call your AI, and your AI can call you.
+Voice interface for assistant backends (Claude, Codex, or OpenAI) via SIP/3CX. Call your AI, and your AI can call you.
 
 ## What is this?
 
@@ -23,7 +23,7 @@ Claude Phone gives your assistant backend a phone number. You can:
 | **Assistant Backend (choose one)** |  | Used by the API server |
 | Claude Code CLI | [claude.ai/code](https://claude.ai/code) | Requires Claude subscription |
 | OpenAI Codex CLI | [developers.openai.com/codex](https://developers.openai.com/codex) | Install with `npm i -g @openai/codex` or `brew install --cask codex` |
-| OpenAI ChatGPT API | [platform.openai.com](https://platform.openai.com/) | Set `OPENAI_API_KEY`; no local CLI required |
+| OpenAI Responses API | [platform.openai.com](https://platform.openai.com/) | Set `OPENAI_API_KEY`; no local CLI required |
 
 ## Platform Support
 
@@ -118,7 +118,7 @@ Best for: Dedicated Pi for voice services, with the API server backend running o
 │  │ Raspberry Pi │   ←→   │ Mac/Linux with      │           │
 │  │ (voice-app)  │  HTTP  │ Assistant backend   │           │
 │  └─────────────┘         │ (Claude/Codex/      │           │
-│                          │  ChatGPT)           │           │
+│                          │  OpenAI)            │           │
 │                          └─────────────────────┘           │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -133,7 +133,7 @@ claude-phone start    # Launches Docker containers
 ```bash
 claude-phone api-server                 # Backend defaults to Claude
 claude-phone api-server --backend codex # Wrap Codex CLI instead
-claude-phone api-server --backend chatgpt # Use OpenAI ChatGPT API directly
+claude-phone api-server --backend openai # Use OpenAI Responses API directly
 ```
 
 Note: On the API server machine, you don't need to run `claude-phone setup` first - the `api-server` command works standalone.
@@ -147,7 +147,7 @@ Note: On the API server machine, you don't need to run `claude-phone setup` firs
 | `claude-phone stop` | Stop all services |
 | `claude-phone status` | Show service status |
 | `claude-phone doctor` | Health check for dependencies and services |
-| `claude-phone api-server [--port N] [--backend claude|codex|chatgpt]` | Start API server standalone (default: 3333) |
+| `claude-phone api-server [--port N] [--backend claude|codex|openai]` | Start API server standalone (default: 3333) |
 | `claude-phone device add` | Add a new device/extension |
 | `claude-phone device list` | List configured devices |
 | `claude-phone device remove <name>` | Remove a device |

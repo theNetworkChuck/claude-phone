@@ -74,12 +74,12 @@ export async function isCodexInstalled() {
 
 /**
  * Check if the selected assistant CLI is installed
- * @param {string} backend - 'claude' | 'codex' | 'chatgpt'
+ * @param {string} backend - 'claude' | 'codex' | 'openai'
  * @returns {Promise<boolean>}
  */
 export async function isAssistantCliInstalled(backend) {
   const b = String(backend || '').trim().toLowerCase();
-  if (b === 'chatgpt') return true; // Uses OpenAI API directly, no local CLI dependency.
+  if (b === 'openai' || b === 'chatgpt') return true; // API-based backend; no local CLI dependency.
   if (b === 'codex') return isCodexInstalled();
   return isClaudeInstalled();
 }

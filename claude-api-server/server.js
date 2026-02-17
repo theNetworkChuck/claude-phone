@@ -34,13 +34,18 @@ const PORT = process.env.PORT || 3333;
  *
  * - "claude": wraps Claude Code CLI (default, backward compatible)
  * - "codex": wraps OpenAI Codex CLI (`codex exec`)
- * - "chatgpt": uses OpenAI Responses API directly
+ * - "openai": uses OpenAI Responses API directly
  */
-const BACKEND = String(process.env.AI_BACKEND || process.env.ASSISTANT_BACKEND || 'claude')
+const RAW_BACKEND = String(process.env.AI_BACKEND || process.env.ASSISTANT_BACKEND || 'claude')
   .trim()
   .toLowerCase();
 
-const SUPPORTED_BACKENDS = new Set(['claude', 'codex', 'chatgpt']);
+const BACKEND = RAW_BACKEND === 'chatgpt' ? 'openai' : RAW_BACKEND;
+if (RAW_BACKEND === 'chatgpt') {
+  console.warn('[STARTUP] "chatgpt" backend is deprecated; using "openai".');
+}
+
+const SUPPORTED_BACKENDS = new Set(['claude', 'codex', 'openai']);
 if (!SUPPORTED_BACKENDS.has(BACKEND)) {
   throw new Error(
     `Unsupported backend "${BACKEND}". Supported: ${Array.from(SUPPORTED_BACKENDS).join(', ')}`
@@ -154,7 +159,7 @@ function buildCodexEnvironment() {
   };
 }
 
-function buildChatGPTEnvironment() {
+function buildOpenAIEnvironment() {
   return {
     ...process.env,
   };
@@ -165,7 +170,7 @@ const cliEnv = BACKEND === 'claude'
   ? buildClaudeEnvironment()
   : BACKEND === 'codex'
     ? buildCodexEnvironment()
-    : buildChatGPTEnvironment();
+    : buildOpenAIEnvironment();
 console.log('[STARTUP] Backend:', BACKEND);
 console.log('[STARTUP] Loaded environment with', Object.keys(cliEnv).length, 'variables');
 console.log('[STARTUP] PATH includes:', String(cliEnv.PATH || '').split(':').slice(0, 5).join(', '), '...');
@@ -182,7 +187,7 @@ const sessions = new Map();
 // Model selection
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
 const CODEX_MODEL = (process.env.CODEX_MODEL || '').trim();
-const CHATGPT_MODEL = (process.env.CHATGPT_MODEL || process.env.OPENAI_MODEL || 'gpt-5-mini').trim();
+const OPENAI_MODEL = (process.env.OPENAI_MODEL || process.env.CHATGPT_MODEL || 'gpt-5-mini').trim();
 
 function parseClaudeStdout(stdout) {
   // Claude Code CLI may output JSONL; when it does, extract the `result` message.
@@ -325,7 +330,7 @@ function runCodexOnce({ fullPrompt }) {
   });
 }
 
-function extractChatGPTText(data) {
+function extractOpenAIText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
     return data.output_text.trim();
   }
@@ -345,7 +350,7 @@ function extractChatGPTText(data) {
   return parts.join('\n').trim();
 }
 
-async function runChatGPTOnce({ fullPrompt, callId, timestamp }) {
+async function runOpenAIOnce({ fullPrompt, callId, timestamp }) {
   const startTime = Date.now();
   const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
 
@@ -361,7 +366,7 @@ async function runChatGPTOnce({ fullPrompt, callId, timestamp }) {
   }
 
   const payload = {
-    model: CHATGPT_MODEL,
+    model: OPENAI_MODEL,
     input: fullPrompt
   };
 
@@ -402,7 +407,7 @@ async function runChatGPTOnce({ fullPrompt, callId, timestamp }) {
       };
     }
 
-    const parsedText = extractChatGPTText(data);
+    const parsedText = extractOpenAIText(data);
     const responseText = parsedText || String(rawBody || '').trim();
 
     return {
@@ -438,8 +443,8 @@ async function runBackendOnce({ fullPrompt, callId, timestamp }) {
     return { code, stdout, stderr, duration_ms, response, sessionId: null };
   }
 
-  const chatgptResult = await runChatGPTOnce({ fullPrompt, callId, timestamp });
-  return chatgptResult;
+  const openaiResult = await runOpenAIOnce({ fullPrompt, callId, timestamp });
+  return openaiResult;
 }
 
 /**
@@ -525,7 +530,7 @@ app.post('/ask', async (req, res) => {
   console.log(`[${timestamp}] BACKEND: ${BACKEND}`);
   if (BACKEND === 'claude') console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
   if (BACKEND === 'codex') console.log(`[${timestamp}] MODEL: ${CODEX_MODEL || 'codex-default'}`);
-  if (BACKEND === 'chatgpt') console.log(`[${timestamp}] MODEL: ${CHATGPT_MODEL}`);
+  if (BACKEND === 'openai') console.log(`[${timestamp}] MODEL: ${OPENAI_MODEL}`);
   console.log(`[${timestamp}] SESSION: callId=${callId || 'none'}, existing=${existingSession || 'none'}`);
   console.log(`[${timestamp}] DEVICE PROMPT: ${devicePrompt ? 'Yes (' + devicePrompt.substring(0, 30) + '...)' : 'No'}`);
 
@@ -638,7 +643,7 @@ app.post('/ask-structured', async (req, res) => {
   console.log(`[${timestamp}] BACKEND: ${BACKEND}`);
   if (BACKEND === 'claude') console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
   if (BACKEND === 'codex') console.log(`[${timestamp}] MODEL: ${CODEX_MODEL || 'codex-default'}`);
-  if (BACKEND === 'chatgpt') console.log(`[${timestamp}] MODEL: ${CHATGPT_MODEL}`);
+  if (BACKEND === 'openai') console.log(`[${timestamp}] MODEL: ${OPENAI_MODEL}`);
   console.log(`[${timestamp}] SESSION: callId=${callId || 'none'}, existing=${callId ? (sessions.has(callId) ? 'yes' : 'no') : 'none'}`);
 
   try {

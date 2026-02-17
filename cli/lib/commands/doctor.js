@@ -82,11 +82,16 @@ async function checkCodexCLI() {
 
 async function checkAssistantCLI(backend) {
   const b = String(backend || '').trim().toLowerCase();
-  if (b === 'chatgpt') {
+  if (b === 'openai' || b === 'chatgpt') {
     return { installed: true, version: 'api' };
   }
   if (b === 'codex') return checkCodexCLI();
   return checkClaudeCLI();
+}
+
+function normalizeBackend(backend) {
+  const b = String(backend || '').trim().toLowerCase();
+  return b === 'chatgpt' ? 'openai' : (b || 'claude');
 }
 
 /**
@@ -266,10 +271,10 @@ async function runApiServerChecks(config) {
   const checks = [];
   let passedCount = 0;
 
-  const backend = config.server?.assistantCli || 'claude';
+  const backend = normalizeBackend(config.server?.assistantCli);
 
-  if (backend === 'chatgpt') {
-    const openAISpinner = ora('Checking OpenAI API key for ChatGPT backend...').start();
+  if (backend === 'openai') {
+    const openAISpinner = ora('Checking OpenAI API key for OpenAI backend...').start();
     const openAIKey = process.env.OPENAI_API_KEY || config.api?.openai?.apiKey;
     if (openAIKey) {
       const openAIResult = await checkOpenAIAPI(openAIKey);
@@ -280,11 +285,11 @@ async function runApiServerChecks(config) {
         openAISpinner.fail(chalk.red(`OpenAI API failed: ${openAIResult.error}`));
         console.log(chalk.gray(`  → Set OPENAI_API_KEY or update key in ${getConfigPath()}\n`));
       }
-      checks.push({ name: 'OpenAI API (chatgpt backend)', passed: openAIResult.connected });
+      checks.push({ name: 'OpenAI API (openai backend)', passed: openAIResult.connected });
     } else {
       openAISpinner.fail(chalk.red('OPENAI_API_KEY not found'));
       console.log(chalk.gray('  → Set OPENAI_API_KEY in your shell or add api.openai.apiKey to config\n'));
-      checks.push({ name: 'OpenAI API (chatgpt backend)', passed: false });
+      checks.push({ name: 'OpenAI API (openai backend)', passed: false });
     }
   } else {
     // Check assistant CLI

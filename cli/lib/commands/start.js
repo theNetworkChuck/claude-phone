@@ -9,21 +9,26 @@ import { isAssistantCliInstalled, sleep } from '../utils.js';
 import { checkClaudeApiServer } from '../network.js';
 import { runPrereqChecks } from '../prereqs.js';
 
-function getChatGPTApiKey(config) {
+function normalizeBackend(backend) {
+  const b = String(backend || '').trim().toLowerCase();
+  return b === 'chatgpt' ? 'openai' : (b || 'claude');
+}
+
+function getOpenAIApiKey(config) {
   return process.env.OPENAI_API_KEY || config.api?.openai?.apiKey || '';
 }
 
 function getApiServerEnv(config, backend) {
-  if (backend === 'chatgpt' && !process.env.OPENAI_API_KEY && config.api?.openai?.apiKey) {
+  if (backend === 'openai' && !process.env.OPENAI_API_KEY && config.api?.openai?.apiKey) {
     return { AI_BACKEND: backend, OPENAI_API_KEY: config.api.openai.apiKey };
   }
   return { AI_BACKEND: backend };
 }
 
 async function warnBackendDependency(config, backend) {
-  if (backend === 'chatgpt') {
-    if (!getChatGPTApiKey(config)) {
-      console.log(chalk.yellow('⚠️  OPENAI_API_KEY not found for ChatGPT backend'));
+  if (backend === 'openai') {
+    if (!getOpenAIApiKey(config)) {
+      console.log(chalk.yellow('⚠️  OPENAI_API_KEY not found for OpenAI backend'));
       console.log(chalk.gray('  Set OPENAI_API_KEY in your shell, or add openai.apiKey in config\n'));
     }
     return;
@@ -93,7 +98,7 @@ export async function startCommand() {
  * @returns {Promise<void>}
  */
 async function startApiServer(config) {
-  const backend = config.server?.assistantCli || 'claude';
+  const backend = normalizeBackend(config.server?.assistantCli);
 
   await warnBackendDependency(config, backend);
 
@@ -272,7 +277,7 @@ async function startBoth(config, isPiMode) {
 
   // Check assistant CLI only in standard mode (Pi mode connects to API server instead)
   if (!isPiMode) {
-    const backend = config.server?.assistantCli || 'claude';
+    const backend = normalizeBackend(config.server?.assistantCli);
     await warnBackendDependency(config, backend);
   }
 
@@ -348,7 +353,7 @@ async function startBoth(config, isPiMode) {
 
   // Start claude-api-server (only in standard mode - Pi mode uses remote API server)
   if (!isPiMode) {
-    const backend = config.server?.assistantCli || 'claude';
+    const backend = normalizeBackend(config.server?.assistantCli);
     spinner.start(`Starting API server (${backend})...`);
     try {
       if (await isServerRunning()) {
@@ -375,7 +380,7 @@ async function startBoth(config, isPiMode) {
   if (isPiMode) {
     console.log(chalk.gray(`  • API server: http://${config.deployment.pi.macIp}:${config.server.claudeApiPort}`));
   } else {
-    const backend = config.server?.assistantCli || 'claude';
+    const backend = normalizeBackend(config.server?.assistantCli);
     console.log(chalk.gray(`  • API server (${backend}): http://localhost:${config.server.claudeApiPort}`));
   }
   console.log(chalk.gray(`  • Voice app API: http://localhost:${config.server.httpPort}\n`));

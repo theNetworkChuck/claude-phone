@@ -8,13 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Codex backend support in `claude-api-server` and CLI backend selection.
-- ChatGPT backend support (`chatgpt`) in `claude-api-server` using OpenAI Responses API.
-- Optional ChatGPT model override support via `CHATGPT_MODEL` (fallback: `OPENAI_MODEL`, default: `gpt-5-mini`).
-- Backend-aware setup/doctor/start handling for `claude`, `codex`, and `chatgpt`.
+- OpenAI backend support (`openai`) in `claude-api-server` using OpenAI Responses API.
+- Optional OpenAI model override support via `OPENAI_MODEL` (default: `gpt-5-mini`).
+- Backend-aware setup/doctor/start handling for `claude`, `codex`, and `openai`.
 - `CLAUDE_PHONE_CONFIG_DIR` override support for isolated CLI config/testing.
 
 ### Changed
-- API server and CLI documentation updated for multi-backend operation (Claude/Codex/ChatGPT).
+- API server and CLI documentation updated for multi-backend operation (Claude/Codex/OpenAI).
 - Project docs wording updated to use backend-agnostic assistant language where appropriate.
 
 ### Fixed
@@ -22,4 +22,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Correct Docker apt repository target selection (`debian` vs `ubuntu`).
   - Fixed privileged write of `/etc/apt/sources.list.d/docker.list` (removed piped sudo write failure).
 - Start command backend CLI check bug (`isClaudeInstalled is not defined`).
-

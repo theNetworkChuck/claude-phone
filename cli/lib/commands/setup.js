@@ -278,7 +278,7 @@ async function setupApiServer(config) {
     choices: [
       { name: 'Claude Code CLI (requires Claude subscription)', value: 'claude' },
       { name: 'OpenAI Codex CLI (codex)', value: 'codex' },
-      { name: 'OpenAI ChatGPT API (chatgpt)', value: 'chatgpt' }
+      { name: 'OpenAI Responses API (openai)', value: 'openai' }
     ]
   }, {
     type: 'input',
@@ -1067,7 +1067,7 @@ async function setupServer(config) {
       choices: [
         { name: 'Claude Code CLI (requires Claude subscription)', value: 'claude' },
         { name: 'OpenAI Codex CLI (codex)', value: 'codex' },
-        { name: 'OpenAI ChatGPT API (chatgpt)', value: 'chatgpt' }
+        { name: 'OpenAI Responses API (openai)', value: 'openai' }
       ]
     },
     {

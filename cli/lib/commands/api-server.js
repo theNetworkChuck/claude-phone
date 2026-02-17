@@ -32,17 +32,18 @@ export async function apiServerCommand(options = {}) {
     port = 3333; // Final fallback
   }
   backend = String(backend || process.env.AI_BACKEND || 'claude').trim().toLowerCase();
-  if (!['claude', 'codex', 'chatgpt'].includes(backend)) {
-    throw new Error(`Invalid backend "${backend}". Use "claude", "codex", or "chatgpt".`);
+  if (backend === 'chatgpt') backend = 'openai'; // Legacy alias
+  if (!['claude', 'codex', 'openai'].includes(backend)) {
+    throw new Error(`Invalid backend "${backend}". Use "claude", "codex", or "openai".`);
   }
 
   console.log(chalk.gray(`Starting API server on port ${port}...`));
   console.log(chalk.gray(`Backend: ${backend}`));
   console.log(chalk.gray('This wraps your local assistant backend for Pi connections.\n'));
 
-  if (backend === 'chatgpt' && !(process.env.OPENAI_API_KEY || configuredOpenAIKey)) {
+  if (backend === 'openai' && !(process.env.OPENAI_API_KEY || configuredOpenAIKey)) {
     console.log(chalk.yellow('⚠️  OPENAI_API_KEY not found in environment or config.'));
-    console.log(chalk.yellow('   ChatGPT backend requests will fail until an API key is provided.\n'));
+    console.log(chalk.yellow('   OpenAI backend requests will fail until an API key is provided.\n'));
   }
 
   const projectRoot = getProjectRoot();
@@ -56,7 +57,7 @@ export async function apiServerCommand(options = {}) {
         ...process.env,
         PORT: port.toString(),
         AI_BACKEND: backend,
-        ...(backend === 'chatgpt' && !process.env.OPENAI_API_KEY && configuredOpenAIKey
+        ...(backend === 'openai' && !process.env.OPENAI_API_KEY && configuredOpenAIKey
           ? { OPENAI_API_KEY: configuredOpenAIKey }
           : {})
       },

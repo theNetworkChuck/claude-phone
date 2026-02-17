@@ -1,6 +1,6 @@
 # Claude Phone
 
-Voice interface for assistant backends (Claude, Codex, or ChatGPT) via SIP/3CX. Call your AI, and your AI can call you.
+Voice interface for assistant backends (Claude, Codex, or OpenAI) via SIP/3CX. Call your AI, and your AI can call you.
 
 ## Project Overview
 
@@ -17,7 +17,7 @@ Claude Phone gives your assistant backend a phone number through 3CX PBX integra
 | Media Server | FreeSWITCH (via drachtio-fsmrf) |
 | STT | OpenAI Whisper API |
 | TTS | ElevenLabs API |
-| AI Backend | Claude CLI, Codex CLI, or OpenAI ChatGPT API (via HTTP wrapper) |
+| AI Backend | Claude CLI, Codex CLI, or OpenAI Responses API (via HTTP wrapper) |
 | PBX | 3CX (any SIP-compatible works) |
 | Container | Docker Compose |
 
@@ -232,9 +232,9 @@ See `.env.example` for all variables. Key ones:
 | `EXTERNAL_IP` | Server LAN IP for RTP routing |
 | `CLAUDE_API_URL` | URL to assistant API server |
 | `ELEVENLABS_API_KEY` | TTS API key |
-| `OPENAI_API_KEY` | Whisper STT key and ChatGPT backend key |
-| `AI_BACKEND` | Backend selector (`claude`, `codex`, or `chatgpt`) |
-| `CHATGPT_MODEL` | Optional ChatGPT model override (default: `gpt-5-mini`) |
+| `OPENAI_API_KEY` | Whisper STT key and OpenAI backend key |
+| `AI_BACKEND` | Backend selector (`claude`, `codex`, or `openai`) |
+| `OPENAI_MODEL` | Optional OpenAI model override (default: `gpt-5-mini`) |
 | `SIP_DOMAIN` | 3CX server FQDN |
 | `SIP_REGISTRAR` | SIP registrar address |
 

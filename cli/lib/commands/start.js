@@ -5,9 +5,40 @@ import path from 'path';
 import { loadConfig, configExists, getInstallationType } from '../config.js';
 import { checkDocker, writeDockerConfig, startContainers } from '../docker.js';
 import { startServer, isServerRunning } from '../process-manager.js';
-import { isClaudeInstalled, sleep } from '../utils.js';
+import { isAssistantCliInstalled, sleep } from '../utils.js';
 import { checkClaudeApiServer } from '../network.js';
 import { runPrereqChecks } from '../prereqs.js';
+
+function getChatGPTApiKey(config) {
+  return process.env.OPENAI_API_KEY || config.api?.openai?.apiKey || '';
+}
+
+function getApiServerEnv(config, backend) {
+  if (backend === 'chatgpt' && !process.env.OPENAI_API_KEY && config.api?.openai?.apiKey) {
+    return { AI_BACKEND: backend, OPENAI_API_KEY: config.api.openai.apiKey };
+  }
+  return { AI_BACKEND: backend };
+}
+
+async function warnBackendDependency(config, backend) {
+  if (backend === 'chatgpt') {
+    if (!getChatGPTApiKey(config)) {
+      console.log(chalk.yellow('⚠️  OPENAI_API_KEY not found for ChatGPT backend'));
+      console.log(chalk.gray('  Set OPENAI_API_KEY in your shell, or add openai.apiKey in config\n'));
+    }
+    return;
+  }
+
+  if (!(await isAssistantCliInstalled(backend))) {
+    console.log(chalk.yellow(`⚠️  ${backend === 'codex' ? 'Codex' : 'Claude'} CLI not found`));
+    if (backend === 'codex') {
+      console.log(chalk.gray('  Install: npm install -g @openai/codex'));
+      console.log(chalk.gray('  Or: brew install --cask codex\n'));
+    } else {
+      console.log(chalk.gray('  Install from: https://claude.com/download\n'));
+    }
+  }
+}
 
 /**
  * Start command - Launch all services
@@ -62,11 +93,9 @@ export async function startCommand() {
  * @returns {Promise<void>}
  */
 async function startApiServer(config) {
-  // Check Claude CLI
-  if (!(await isClaudeInstalled())) {
-    console.log(chalk.yellow('⚠️  Claude CLI not found'));
-    console.log(chalk.gray('  Install from: https://claude.com/download\n'));
-  }
+  const backend = config.server?.assistantCli || 'claude';
+
+  await warnBackendDependency(config, backend);
 
   // Verify path exists
   if (!fs.existsSync(config.paths.claudeApiServer)) {
@@ -85,13 +114,18 @@ async function startApiServer(config) {
   }
 
   // Start claude-api-server
-  const spinner = ora('Starting Claude API server...').start();
+  const spinner = ora('Starting API server...').start();
   try {
     if (await isServerRunning()) {
-      spinner.warn('Claude API server already running');
+      spinner.warn('API server already running');
     } else {
-      await startServer(config.paths.claudeApiServer, config.server.claudeApiPort);
-      spinner.succeed(`Claude API server started on port ${config.server.claudeApiPort}`);
+      await startServer(
+        config.paths.claudeApiServer,
+        config.server.claudeApiPort,
+        null,
+        getApiServerEnv(config, backend)
+      );
+      spinner.succeed(`API server started on port ${config.server.claudeApiPort} (backend: ${backend})`);
     }
   } catch (error) {
     spinner.fail(`Failed to start server: ${error.message}`);
@@ -101,7 +135,7 @@ async function startApiServer(config) {
   // Success
   console.log(chalk.bold.green('\n✓ API server running!\n'));
   console.log(chalk.gray('Service:'));
-  console.log(chalk.gray(`  • Claude API server: http://localhost:${config.server.claudeApiPort}\n`));
+  console.log(chalk.gray(`  • API server (${backend}): http://localhost:${config.server.claudeApiPort}\n`));
   console.log(chalk.gray('Voice servers can connect to this API server.\n'));
 }
 
@@ -236,10 +270,10 @@ async function startBoth(config, isPiMode) {
     }
   }
 
-  // Check Claude CLI only in standard mode (Pi mode connects to API server instead)
-  if (!isPiMode && !(await isClaudeInstalled())) {
-    console.log(chalk.yellow('⚠️  Claude CLI not found'));
-    console.log(chalk.gray('  Install from: https://claude.com/download\n'));
+  // Check assistant CLI only in standard mode (Pi mode connects to API server instead)
+  if (!isPiMode) {
+    const backend = config.server?.assistantCli || 'claude';
+    await warnBackendDependency(config, backend);
   }
 
   // In Pi mode, verify API server is reachable
@@ -314,13 +348,19 @@ async function startBoth(config, isPiMode) {
 
   // Start claude-api-server (only in standard mode - Pi mode uses remote API server)
   if (!isPiMode) {
-    spinner.start('Starting Claude API server...');
+    const backend = config.server?.assistantCli || 'claude';
+    spinner.start(`Starting API server (${backend})...`);
     try {
       if (await isServerRunning()) {
-        spinner.warn('Claude API server already running');
+        spinner.warn('API server already running');
       } else {
-        await startServer(config.paths.claudeApiServer, config.server.claudeApiPort);
-        spinner.succeed(`Claude API server started on port ${config.server.claudeApiPort}`);
+        await startServer(
+          config.paths.claudeApiServer,
+          config.server.claudeApiPort,
+          null,
+          getApiServerEnv(config, backend)
+        );
+        spinner.succeed(`API server started on port ${config.server.claudeApiPort} (backend: ${backend})`);
       }
     } catch (error) {
       spinner.fail(`Failed to start server: ${error.message}`);
@@ -335,7 +375,8 @@ async function startBoth(config, isPiMode) {
   if (isPiMode) {
     console.log(chalk.gray(`  • API server: http://${config.deployment.pi.macIp}:${config.server.claudeApiPort}`));
   } else {
-    console.log(chalk.gray(`  • Claude API server: http://localhost:${config.server.claudeApiPort}`));
+    const backend = config.server?.assistantCli || 'claude';
+    console.log(chalk.gray(`  • API server (${backend}): http://localhost:${config.server.claudeApiPort}`));
   }
   console.log(chalk.gray(`  • Voice app API: http://localhost:${config.server.httpPort}\n`));
   console.log(chalk.gray('Ready to receive calls on:'));

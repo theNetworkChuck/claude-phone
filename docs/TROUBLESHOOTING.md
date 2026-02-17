@@ -158,7 +158,7 @@ claude-phone start
 
 ### "Sorry, something went wrong" on every call
 
-**Symptom:** Calls connect, but Claude always says there was an error.
+**Symptom:** Calls connect, but the assistant always says there was an error.
 
 **Causes:**
 
@@ -171,11 +171,19 @@ claude-phone start
    curl http://<api-server-ip>:3333/health
    ```
 
-2. **Claude Code CLI not working:**
+2. **Selected backend is not working:**
    ```bash
    # On the API server machine:
+   curl http://localhost:3333/health
+
+   # If backend is claude:
    claude --version
-   claude "Hello"  # Test basic functionality
+
+   # If backend is codex:
+   codex --version
+
+   # If backend is chatgpt:
+   # Ensure OPENAI_API_KEY is set and valid
    ```
 
 3. **Session errors:**
@@ -249,9 +257,12 @@ claude-phone config show | grep claudeApiUrl
    lsof -i :3333
    ```
 
-2. Verify Claude Code CLI works:
+2. Verify selected backend prerequisites:
    ```bash
-   claude --version
+   curl http://localhost:3333/health
+   # backend=claude  -> claude --version
+   # backend=codex   -> codex --version
+   # backend=chatgpt -> OPENAI_API_KEY must be set
    ```
 
 3. Check for Node.js errors in output

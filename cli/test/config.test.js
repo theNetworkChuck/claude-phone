@@ -14,6 +14,7 @@ import {
 // Test config directory
 const TEST_HOME = path.join(os.tmpdir(), 'claude-phone-test-' + Date.now());
 process.env.HOME = TEST_HOME;
+delete process.env.CLAUDE_PHONE_CONFIG_DIR;
 
 test('config module', async (t) => {
   await t.test('getConfigDir returns ~/.claude-phone', () => {
@@ -24,6 +25,16 @@ test('config module', async (t) => {
   await t.test('getConfigPath returns ~/.claude-phone/config.json', () => {
     const configPath = getConfigPath();
     assert.strictEqual(configPath, path.join(TEST_HOME, '.claude-phone', 'config.json'));
+  });
+
+  await t.test('CLAUDE_PHONE_CONFIG_DIR overrides config dir', async () => {
+    const overrideDir = path.join(TEST_HOME, 'override-config');
+    process.env.CLAUDE_PHONE_CONFIG_DIR = overrideDir;
+
+    assert.strictEqual(getConfigDir(), overrideDir);
+    assert.strictEqual(getConfigPath(), path.join(overrideDir, 'config.json'));
+
+    delete process.env.CLAUDE_PHONE_CONFIG_DIR;
   });
 
   await t.test('configExists returns false when no config', () => {

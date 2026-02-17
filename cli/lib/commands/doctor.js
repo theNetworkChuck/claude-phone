@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { spawn } from 'child_process';
 import axios from 'axios';
-import { loadConfig, configExists, getInstallationType } from '../config.js';
+import { loadConfig, configExists, getInstallationType, getConfigPath } from '../config.js';
 import { checkDocker, getContainerStatus } from '../docker.js';
 import { isServerRunning, getServerPid } from '../process-manager.js';
 import { validateElevenLabsKey, validateOpenAIKey } from '../validators.js';
@@ -51,6 +51,42 @@ async function checkClaudeCLI() {
       });
     });
   });
+}
+
+/**
+ * Check if Codex CLI is installed
+ * @returns {Promise<{installed: boolean, version?: string, error?: string}>}
+ */
+async function checkCodexCLI() {
+  return new Promise((resolve) => {
+    const child = spawn('codex', ['--version'], { stdio: 'pipe' });
+
+    let output = '';
+    child.stdout.on('data', (data) => { output += data.toString(); });
+    child.stderr.on('data', (data) => { output += data.toString(); });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        const versionMatch = output.match(/(\d+\.\d+\.\d+)/);
+        resolve({ installed: true, version: versionMatch ? versionMatch[1] : 'unknown' });
+      } else {
+        resolve({ installed: false, error: 'Codex CLI not found in PATH' });
+      }
+    });
+
+    child.on('error', () => {
+      resolve({ installed: false, error: 'Codex CLI not found' });
+    });
+  });
+}
+
+async function checkAssistantCLI(backend) {
+  const b = String(backend || '').trim().toLowerCase();
+  if (b === 'chatgpt') {
+    return { installed: true, version: 'api' };
+  }
+  if (b === 'codex') return checkCodexCLI();
+  return checkClaudeCLI();
 }
 
 /**
@@ -230,33 +266,61 @@ async function runApiServerChecks(config) {
   const checks = [];
   let passedCount = 0;
 
-  // Check Claude CLI
-  const claudeSpinner = ora('Checking Claude CLI...').start();
-  const claudeResult = await checkClaudeCLI();
-  if (claudeResult.installed) {
-    claudeSpinner.succeed(chalk.green(`Claude CLI installed (v${claudeResult.version})`));
-    passedCount++;
-  } else {
-    claudeSpinner.fail(chalk.red(`Claude CLI not found: ${claudeResult.error}`));
-    console.log(chalk.gray('  → Install Claude CLI: npm install -g @anthropic-ai/claude\n'));
-  }
-  checks.push({ name: 'Claude CLI', passed: claudeResult.installed });
+  const backend = config.server?.assistantCli || 'claude';
 
-  // Check local Claude API server
-  const apiServerSpinner = ora('Checking Claude API server...').start();
+  if (backend === 'chatgpt') {
+    const openAISpinner = ora('Checking OpenAI API key for ChatGPT backend...').start();
+    const openAIKey = process.env.OPENAI_API_KEY || config.api?.openai?.apiKey;
+    if (openAIKey) {
+      const openAIResult = await checkOpenAIAPI(openAIKey);
+      if (openAIResult.connected) {
+        openAISpinner.succeed(chalk.green('OpenAI API connected'));
+        passedCount++;
+      } else {
+        openAISpinner.fail(chalk.red(`OpenAI API failed: ${openAIResult.error}`));
+        console.log(chalk.gray(`  → Set OPENAI_API_KEY or update key in ${getConfigPath()}\n`));
+      }
+      checks.push({ name: 'OpenAI API (chatgpt backend)', passed: openAIResult.connected });
+    } else {
+      openAISpinner.fail(chalk.red('OPENAI_API_KEY not found'));
+      console.log(chalk.gray('  → Set OPENAI_API_KEY in your shell or add api.openai.apiKey to config\n'));
+      checks.push({ name: 'OpenAI API (chatgpt backend)', passed: false });
+    }
+  } else {
+    // Check assistant CLI
+    const cliLabel = backend === 'codex' ? 'Codex CLI' : 'Claude CLI';
+    const cliSpinner = ora(`Checking ${cliLabel}...`).start();
+    const cliResult = await checkAssistantCLI(backend);
+    if (cliResult.installed) {
+      cliSpinner.succeed(chalk.green(`${cliLabel} installed (v${cliResult.version})`));
+      passedCount++;
+    } else {
+      cliSpinner.fail(chalk.red(`${cliLabel} not found: ${cliResult.error}`));
+      if (backend === 'codex') {
+        console.log(chalk.gray('  → Install Codex CLI: npm install -g @openai/codex'));
+        console.log(chalk.gray('    Or: brew install --cask codex\n'));
+      } else {
+        console.log(chalk.gray('  → Install Claude CLI: npm install -g @anthropic-ai/claude\n'));
+      }
+    }
+    checks.push({ name: cliLabel, passed: cliResult.installed });
+  }
+
+  // Check local API server
+  const apiServerSpinner = ora('Checking API server...').start();
   const apiServerResult = await checkClaudeAPIServer(config.server.claudeApiPort);
   if (apiServerResult.running && apiServerResult.healthy) {
-    apiServerSpinner.succeed(chalk.green(`Claude API server running (PID: ${apiServerResult.pid})`));
+    apiServerSpinner.succeed(chalk.green(`API server running (PID: ${apiServerResult.pid})`));
     passedCount++;
   } else if (apiServerResult.running && !apiServerResult.healthy) {
-    apiServerSpinner.warn(chalk.yellow(`Claude API server running but unhealthy (PID: ${apiServerResult.pid})`));
+    apiServerSpinner.warn(chalk.yellow(`API server running but unhealthy (PID: ${apiServerResult.pid})`));
     console.log(chalk.gray(`  → ${apiServerResult.error}\n`));
     passedCount++; // Count as partial pass
   } else {
-    apiServerSpinner.fail(chalk.red(`Claude API server not running: ${apiServerResult.error}`));
+    apiServerSpinner.fail(chalk.red(`API server not running: ${apiServerResult.error}`));
     console.log(chalk.gray('  → Run "claude-phone start" to launch services\n'));
   }
-  checks.push({ name: 'Claude API server', passed: apiServerResult.running });
+  checks.push({ name: 'API server', passed: apiServerResult.running });
 
   return { checks, passedCount };
 }
@@ -292,7 +356,7 @@ async function runVoiceServerChecks(config, isPiSplit) {
       passedCount++;
     } else {
       elevenLabsSpinner.fail(chalk.red(`ElevenLabs API failed: ${elevenLabsResult.error}`));
-      console.log(chalk.gray('  → Check your API key in ~/.claude-phone/config.json\n'));
+      console.log(chalk.gray(`  → Check your API key in ${getConfigPath()}\n`));
     }
     checks.push({ name: 'ElevenLabs API', passed: elevenLabsResult.connected });
   }
@@ -306,7 +370,7 @@ async function runVoiceServerChecks(config, isPiSplit) {
       passedCount++;
     } else {
       openAISpinner.fail(chalk.red(`OpenAI API failed: ${openAIResult.error}`));
-      console.log(chalk.gray('  → Check your API key in ~/.claude-phone/config.json\n'));
+      console.log(chalk.gray(`  → Check your API key in ${getConfigPath()}\n`));
     }
     checks.push({ name: 'OpenAI API', passed: openAIResult.connected });
   }
@@ -339,19 +403,19 @@ async function runVoiceServerChecks(config, isPiSplit) {
     }
     checks.push({ name: 'API server IP reachability', passed: apiServerReachable });
 
-    // Check Claude API server on remote server
-    const apiServerSpinner = ora('Checking Claude API server...').start();
+    // Check API server on remote server
+    const apiServerSpinner = ora('Checking API server...').start();
     const apiUrl = `http://${apiServerIp}:${config.server.claudeApiPort}`;
     const apiHealth = await checkClaudeApiHealth(apiUrl);
 
     if (apiHealth.healthy) {
-      apiServerSpinner.succeed(chalk.green(`Claude API server healthy at ${apiUrl}`));
+      apiServerSpinner.succeed(chalk.green(`API server healthy at ${apiUrl}`));
       passedCount++;
     } else {
-      apiServerSpinner.fail(chalk.red(`Claude API server not responding`));
+      apiServerSpinner.fail(chalk.red(`API server not responding`));
       console.log(chalk.gray(`  → Run "claude-phone api-server" on your API server\n`));
     }
-    checks.push({ name: 'Claude API server (remote)', passed: apiHealth.healthy });
+    checks.push({ name: 'API server (remote)', passed: apiHealth.healthy });
 
     // Check drachtio port availability
     const drachtioPort = config.deployment.pi.drachtioPort || 5060;

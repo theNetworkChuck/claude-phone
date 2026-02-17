@@ -7,6 +7,12 @@ import os from 'os';
  * @returns {string} Path to ~/.claude-phone
  */
 export function getConfigDir() {
+  // Allow isolating config for testing without changing HOME (important for Codex CLI login).
+  const override = process.env.CLAUDE_PHONE_CONFIG_DIR;
+  if (override && String(override).trim()) {
+    return path.resolve(String(override).trim());
+  }
+
   return path.join(os.homedir(), '.claude-phone');
 }
 
@@ -44,6 +50,8 @@ export async function loadConfig() {
   if (!config.installationType) {
     config.installationType = 'both';
   }
+  if (!config.server) config.server = {};
+  if (!config.server.assistantCli) config.server.assistantCli = 'claude';
 
   return config;
 }

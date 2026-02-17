@@ -1,14 +1,14 @@
 /**
- * Claude HTTP API Server
+ * Assistant HTTP API Server
  *
- * HTTP server that wraps Claude Code CLI with session management
+ * HTTP server that wraps assistant backends with session management
  * Runs on the API server to handle voice interface queries
  *
  * Usage:
  *   node server.js
  *
  * Endpoints:
- *   POST /ask - Send a prompt to Claude (with optional callId for session)
+ *   POST /ask - Send a prompt to selected backend (with optional callId for session)
  *   POST /end-session - Clean up session for a call
  *   GET /health - Health check
  */
@@ -16,6 +16,7 @@
 const express = require('express');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const {
   buildQueryContext,
@@ -29,9 +30,51 @@ const app = express();
 const PORT = process.env.PORT || 3333;
 
 /**
- * Build the full environment that Claude Code expects
- * This mimics what happens when you run `claude` in a terminal
- * with your zsh profile fully loaded.
+ * Backend selection.
+ *
+ * - "claude": wraps Claude Code CLI (default, backward compatible)
+ * - "codex": wraps OpenAI Codex CLI (`codex exec`)
+ * - "chatgpt": uses OpenAI Responses API directly
+ */
+const BACKEND = String(process.env.AI_BACKEND || process.env.ASSISTANT_BACKEND || 'claude')
+  .trim()
+  .toLowerCase();
+
+const SUPPORTED_BACKENDS = new Set(['claude', 'codex', 'chatgpt']);
+if (!SUPPORTED_BACKENDS.has(BACKEND)) {
+  throw new Error(
+    `Unsupported backend "${BACKEND}". Supported: ${Array.from(SUPPORTED_BACKENDS).join(', ')}`
+  );
+}
+
+function buildPathWithFallbacks(extraDirs = []) {
+  const parts = [];
+  for (const dir of extraDirs) parts.push(dir);
+  if (process.env.PATH) parts.push(process.env.PATH);
+
+  // Ensure some common fallback locations are always present.
+  parts.push('/opt/homebrew/bin');
+  parts.push('/usr/local/bin');
+  parts.push('/usr/bin');
+  parts.push('/bin');
+  parts.push('/usr/sbin');
+  parts.push('/sbin');
+
+  const seen = new Set();
+  const deduped = [];
+  for (const segment of parts.join(':').split(':')) {
+    const trimmed = String(segment || '').trim();
+    if (!trimmed) continue;
+    if (seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    deduped.push(trimmed);
+  }
+  return deduped.join(':');
+}
+
+/**
+ * Build an environment that Claude Code expects.
+ * This mimics what happens when you run `claude` in a terminal.
  */
 function buildClaudeEnvironment() {
   const HOME = process.env.HOME || '/Users/networkchuck';
@@ -54,7 +97,7 @@ function buildClaudeEnvironment() {
   }
 
   // Build PATH like zsh profile does
-  const fullPath = [
+  const fullPath = buildPathWithFallbacks([
     '/opt/homebrew/bin',
     '/opt/homebrew/opt/python@3.12/bin',
     '/opt/homebrew/opt/libpq/bin',
@@ -72,7 +115,7 @@ function buildClaudeEnvironment() {
     '/bin',
     '/usr/sbin',
     '/sbin'
-  ].join(':');
+  ]);
 
   const env = {
     ...process.env,
@@ -99,22 +142,47 @@ function buildClaudeEnvironment() {
   return env;
 }
 
+function buildCodexEnvironment() {
+  // Codex generally reads config from ~/.codex/config.toml and/or stored login.
+  // We keep this environment lightweight and avoid clobbering PATH so "codex"
+  // is found even when installed via nvm/npm.
+  const HOME = process.env.HOME || '/Users/networkchuck';
+  return {
+    ...process.env,
+    HOME,
+    PATH: buildPathWithFallbacks([]),
+  };
+}
+
+function buildChatGPTEnvironment() {
+  return {
+    ...process.env,
+  };
+}
+
 // Pre-build the environment once at startup
-const claudeEnv = buildClaudeEnvironment();
-console.log('[STARTUP] Loaded environment with', Object.keys(claudeEnv).length, 'variables');
-console.log('[STARTUP] PATH includes:', claudeEnv.PATH.split(':').slice(0, 5).join(', '), '...');
+const cliEnv = BACKEND === 'claude'
+  ? buildClaudeEnvironment()
+  : BACKEND === 'codex'
+    ? buildCodexEnvironment()
+    : buildChatGPTEnvironment();
+console.log('[STARTUP] Backend:', BACKEND);
+console.log('[STARTUP] Loaded environment with', Object.keys(cliEnv).length, 'variables');
+console.log('[STARTUP] PATH includes:', String(cliEnv.PATH || '').split(':').slice(0, 5).join(', '), '...');
 
 // Log which API keys are available (without showing values)
-const apiKeys = Object.keys(claudeEnv).filter(k =>
+const apiKeys = Object.keys(cliEnv).filter(k =>
   k.includes('API_KEY') || k.includes('TOKEN') || k.includes('SECRET') || k === 'PAI_DIR'
 );
 console.log('[STARTUP] API keys loaded:', apiKeys.join(', '));
 
-// Session storage: callId -> claudeSessionId
+// Session storage: callId -> backend session identifier
 const sessions = new Map();
 
-// Model selection - Sonnet for balanced speed/quality
+// Model selection
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+const CODEX_MODEL = (process.env.CODEX_MODEL || '').trim();
+const CHATGPT_MODEL = (process.env.CHATGPT_MODEL || process.env.OPENAI_MODEL || 'gpt-5-mini').trim();
 
 function parseClaudeStdout(stdout) {
   // Claude Code CLI may output JSONL; when it does, extract the `result` message.
@@ -168,7 +236,7 @@ function runClaudeOnce({ fullPrompt, callId, timestamp }) {
     const claude = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
-      env: claudeEnv
+      env: cliEnv
     });
 
     let stdout = '';
@@ -187,6 +255,191 @@ function runClaudeOnce({ fullPrompt, callId, timestamp }) {
       resolve({ code, stdout, stderr, duration_ms });
     });
   });
+}
+
+function safeUnlink(filePath) {
+  try {
+    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    // Ignore cleanup errors.
+  }
+}
+
+function runCodexOnce({ fullPrompt }) {
+  const startTime = Date.now();
+  const sandbox = String(process.env.CODEX_SANDBOX || 'workspace-write');
+  const model = CODEX_MODEL;
+
+  const outFile = path.join(
+    os.tmpdir(),
+    `codex-last-message-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`
+  );
+
+  const args = [
+    'exec',
+    '--skip-git-repo-check',
+    '--color', 'never',
+    '--sandbox', sandbox,
+    '--output-last-message', outFile,
+  ];
+
+  if (model) {
+    args.push('-m', model);
+  }
+
+  // PROMPT as final arg.
+  args.push(fullPrompt);
+
+  return new Promise((resolve, reject) => {
+    const codex = spawn('codex', args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: false,
+      env: cliEnv,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    codex.stdin.end();
+    codex.stdout.on('data', (data) => { stdout += data.toString(); });
+    codex.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    codex.on('error', (error) => {
+      safeUnlink(outFile);
+      reject(error);
+    });
+
+    codex.on('close', (code) => {
+      const duration_ms = Date.now() - startTime;
+      let lastMessage = '';
+      try {
+        if (fs.existsSync(outFile)) lastMessage = fs.readFileSync(outFile, 'utf8').trim();
+      } catch {
+        // Ignore; fall back to stdout.
+      } finally {
+        safeUnlink(outFile);
+      }
+
+      resolve({ code, stdout, stderr, duration_ms, lastMessage });
+    });
+  });
+}
+
+function extractChatGPTText(data) {
+  if (typeof data?.output_text === 'string' && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  if (!Array.isArray(data?.output)) return '';
+
+  const parts = [];
+  for (const item of data.output) {
+    if (!Array.isArray(item?.content)) continue;
+    for (const content of item.content) {
+      if (content?.type === 'output_text' && typeof content.text === 'string') {
+        parts.push(content.text);
+      }
+    }
+  }
+
+  return parts.join('\n').trim();
+}
+
+async function runChatGPTOnce({ fullPrompt, callId, timestamp }) {
+  const startTime = Date.now();
+  const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
+
+  if (!apiKey) {
+    return {
+      code: 1,
+      stdout: '',
+      stderr: 'OPENAI_API_KEY is not set',
+      duration_ms: Date.now() - startTime,
+      response: '',
+      sessionId: null
+    };
+  }
+
+  const payload = {
+    model: CHATGPT_MODEL,
+    input: fullPrompt
+  };
+
+  if (callId && sessions.has(callId)) {
+    payload.previous_response_id = sessions.get(callId);
+    console.log(`[${timestamp}] Resuming response chain: ${sessions.get(callId)}`);
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const rawBody = await response.text();
+    const duration_ms = Date.now() - startTime;
+
+    let data = null;
+    try {
+      data = JSON.parse(rawBody);
+    } catch {
+      // Leave as null; we'll fall back to raw text.
+    }
+
+    if (!response.ok) {
+      const errorMessage = data?.error?.message || rawBody || `OpenAI API HTTP ${response.status}`;
+      return {
+        code: response.status || 1,
+        stdout: rawBody,
+        stderr: errorMessage,
+        duration_ms,
+        response: '',
+        sessionId: null
+      };
+    }
+
+    const parsedText = extractChatGPTText(data);
+    const responseText = parsedText || String(rawBody || '').trim();
+
+    return {
+      code: 0,
+      stdout: rawBody,
+      stderr: '',
+      duration_ms,
+      response: responseText,
+      sessionId: data?.id || null
+    };
+  } catch (error) {
+    return {
+      code: 1,
+      stdout: '',
+      stderr: error.message,
+      duration_ms: Date.now() - startTime,
+      response: '',
+      sessionId: null
+    };
+  }
+}
+
+async function runBackendOnce({ fullPrompt, callId, timestamp }) {
+  if (BACKEND === 'claude') {
+    const { code, stdout, stderr, duration_ms } = await runClaudeOnce({ fullPrompt, callId, timestamp });
+    const { response, sessionId } = parseClaudeStdout(stdout);
+    return { code, stdout, stderr, duration_ms, response, sessionId };
+  }
+
+  if (BACKEND === 'codex') {
+    const { code, stdout, stderr, duration_ms, lastMessage } = await runCodexOnce({ fullPrompt, callId, timestamp });
+    const response = (lastMessage || String(stdout || '').trim());
+    return { code, stdout, stderr, duration_ms, response, sessionId: null };
+  }
+
+  const chatgptResult = await runChatGPTOnce({ fullPrompt, callId, timestamp });
+  return chatgptResult;
 }
 
 /**
@@ -269,7 +522,10 @@ app.post('/ask', async (req, res) => {
   const existingSession = callId ? sessions.get(callId) : null;
 
   console.log(`[${timestamp}] QUERY: "${prompt.substring(0, 100)}..."`);
-  console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
+  console.log(`[${timestamp}] BACKEND: ${BACKEND}`);
+  if (BACKEND === 'claude') console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
+  if (BACKEND === 'codex') console.log(`[${timestamp}] MODEL: ${CODEX_MODEL || 'codex-default'}`);
+  if (BACKEND === 'chatgpt') console.log(`[${timestamp}] MODEL: ${CHATGPT_MODEL}`);
   console.log(`[${timestamp}] SESSION: callId=${callId || 'none'}, existing=${existingSession || 'none'}`);
   console.log(`[${timestamp}] DEVICE PROMPT: ${devicePrompt ? 'Yes (' + devicePrompt.substring(0, 30) + '...)' : 'No'}`);
 
@@ -289,17 +545,19 @@ app.post('/ask', async (req, res) => {
     fullPrompt += VOICE_CONTEXT;
     fullPrompt += prompt;
 
-    const { code, stdout, stderr, duration_ms } = await runClaudeOnce({ fullPrompt, callId, timestamp });
+    const { code, stdout, stderr, duration_ms, response, sessionId } = await runBackendOnce({
+      fullPrompt,
+      callId,
+      timestamp
+    });
 
     if (code !== 0) {
-      console.error(`[${new Date().toISOString()}] ERROR: Claude CLI exited with code ${code}`);
+      console.error(`[${new Date().toISOString()}] ERROR: Backend CLI exited with code ${code}`);
       console.error(`STDERR: ${stderr}`);
       console.error(`STDOUT: ${stdout.substring(0, 500)}`);
       const errorMsg = stderr || stdout || `Exit code ${code}`;
-      return res.json({ success: false, error: `Claude CLI failed: ${errorMsg}`, duration_ms });
+      return res.json({ success: false, error: `${BACKEND} backend failed: ${errorMsg}`, duration_ms });
     }
-
-    const { response, sessionId } = parseClaudeStdout(stdout);
 
     if (sessionId && callId) {
       sessions.set(callId, sessionId);
@@ -377,7 +635,10 @@ app.post('/ask-structured', async (req, res) => {
   });
 
   console.log(`[${timestamp}] STRUCTURED QUERY: "${String(prompt).substring(0, 100)}..."`);
-  console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
+  console.log(`[${timestamp}] BACKEND: ${BACKEND}`);
+  if (BACKEND === 'claude') console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
+  if (BACKEND === 'codex') console.log(`[${timestamp}] MODEL: ${CODEX_MODEL || 'codex-default'}`);
+  if (BACKEND === 'chatgpt') console.log(`[${timestamp}] MODEL: ${CHATGPT_MODEL}`);
   console.log(`[${timestamp}] SESSION: callId=${callId || 'none'}, existing=${callId ? (sessions.has(callId) ? 'yes' : 'no') : 'none'}`);
 
   try {
@@ -389,12 +650,12 @@ app.post('/ask-structured', async (req, res) => {
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       attemptsMade = attempt + 1;
-      const { code, stdout, stderr, duration_ms } = await runClaudeOnce({ fullPrompt, callId, timestamp });
-      totalDuration += duration_ms;
+      const run = await runBackendOnce({ fullPrompt, callId, timestamp });
+      totalDuration += run.duration_ms;
 
-      if (code !== 0) {
-        lastError = `Claude CLI failed: ${stderr}`;
-        lastRaw = String(stdout || '').trim();
+      if (run.code !== 0) {
+        lastError = `${BACKEND} backend failed: ${run.stderr}`;
+        lastRaw = String(run.stdout || '').trim();
         return res.status(502).json({
           success: false,
           error: lastError,
@@ -404,12 +665,10 @@ app.post('/ask-structured', async (req, res) => {
         });
       }
 
-      const { response, sessionId } = parseClaudeStdout(stdout);
-      lastRaw = response;
+      lastRaw = run.response;
+      if (run.sessionId && callId) sessions.set(callId, run.sessionId);
 
-      if (sessionId && callId) sessions.set(callId, sessionId);
-
-      const parsed = tryParseJsonFromText(response);
+      const parsed = tryParseJsonFromText(lastRaw);
       if (!parsed.ok) {
         lastError = parsed.error || 'Failed to parse JSON';
       } else {
@@ -419,7 +678,7 @@ app.post('/ask-structured', async (req, res) => {
             success: true,
             data: parsed.data,
             json_text: parsed.jsonText,
-            raw_response: response,
+            raw_response: lastRaw,
             duration_ms: totalDuration,
             attempts: attemptsMade,
           });
@@ -488,6 +747,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'claude-api-server',
+    backend: BACKEND,
     timestamp: new Date().toISOString()
   });
 });
@@ -498,10 +758,11 @@ app.get('/health', (req, res) => {
  */
 app.get('/', (req, res) => {
   res.json({
-    service: 'Claude HTTP API Server',
+    service: 'Assistant HTTP API Server',
     version: '1.0.0',
+    backend: BACKEND,
     endpoints: {
-      'POST /ask': 'Send a prompt to Claude',
+      'POST /ask': 'Send a prompt to the assistant backend',
       'POST /ask-structured': 'Send a prompt and return validated JSON (n8n)',
       'GET /health': 'Health check'
     }
@@ -511,11 +772,11 @@ app.get('/', (req, res) => {
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(64));
-  console.log('Claude HTTP API Server');
+  console.log('Assistant HTTP API Server');
   console.log('='.repeat(64));
   console.log(`\nListening on: http://0.0.0.0:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log('\nReady to receive Claude queries from voice interface.\n');
+  console.log('\nReady to receive assistant queries from voice interface.\n');
 });
 
 // Graceful shutdown

@@ -60,6 +60,31 @@ export async function isClaudeInstalled() {
 }
 
 /**
+ * Check if Codex CLI is installed
+ * @returns {Promise<boolean>}
+ */
+export async function isCodexInstalled() {
+  return new Promise((resolve) => {
+    const check = spawn('which', ['codex']);
+    check.on('close', (code) => {
+      resolve(code === 0);
+    });
+  });
+}
+
+/**
+ * Check if the selected assistant CLI is installed
+ * @param {string} backend - 'claude' | 'codex' | 'chatgpt'
+ * @returns {Promise<boolean>}
+ */
+export async function isAssistantCliInstalled(backend) {
+  const b = String(backend || '').trim().toLowerCase();
+  if (b === 'chatgpt') return true; // Uses OpenAI API directly, no local CLI dependency.
+  if (b === 'codex') return isCodexInstalled();
+  return isClaudeInstalled();
+}
+
+/**
  * Sleep for specified milliseconds
  * @param {number} ms - Milliseconds to sleep
  * @returns {Promise<void>}

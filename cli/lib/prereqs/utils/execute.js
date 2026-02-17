@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { execSync, spawn } from 'child_process';
 import chalk from 'chalk';
+import { getConfigDir } from '../../config.js';
 
 /**
  * Download a file from URL to local path
@@ -197,7 +198,7 @@ export async function executeScript(url, options = {}) {
  * @returns {string} Path to log file
  */
 function getLogFile() {
-  const configDir = path.join(os.homedir(), '.claude-phone');
+  const configDir = getConfigDir();
 
   // Ensure config directory exists
   if (!fs.existsSync(configDir)) {

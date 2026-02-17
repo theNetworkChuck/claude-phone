@@ -4,13 +4,13 @@
 
 # Claude Phone
 
-Voice interface for Claude Code via SIP/3CX. Call your AI, and your AI can call you.
+Voice interface for assistant backends (Claude, Codex, or ChatGPT) via SIP/3CX. Call your AI, and your AI can call you.
 
 ## What is this?
 
-Claude Phone gives your Claude Code installation a phone number. You can:
+Claude Phone gives your assistant backend a phone number. You can:
 
-- **Inbound**: Call an extension and talk to Claude - run commands, check status, ask questions
+- **Inbound**: Call an extension and talk to your assistant - run commands, check status, ask questions
 - **Outbound**: Your server can call YOU with alerts, then have a conversation about what to do
 
 ## Prerequisites
@@ -20,7 +20,10 @@ Claude Phone gives your Claude Code installation a phone number. You can:
 | **3CX Cloud Account** | [3cx.com](https://www.3cx.com/) | Free tier works |
 | **ElevenLabs API Key** | [elevenlabs.io](https://elevenlabs.io/) | For text-to-speech |
 | **OpenAI API Key** | [platform.openai.com](https://platform.openai.com/) | For Whisper speech-to-text |
-| **Claude Code CLI** | [claude.ai/code](https://claude.ai/code) | Requires Claude Max subscription |
+| **Assistant Backend (choose one)** |  | Used by the API server |
+| Claude Code CLI | [claude.ai/code](https://claude.ai/code) | Requires Claude subscription |
+| OpenAI Codex CLI | [developers.openai.com/codex](https://developers.openai.com/codex) | Install with `npm i -g @openai/codex` or `brew install --cask codex` |
+| OpenAI ChatGPT API | [platform.openai.com](https://platform.openai.com/) | Set `OPENAI_API_KEY`; no local CLI required |
 
 ## Platform Support
 
@@ -55,7 +58,7 @@ The setup wizard asks what you're installing:
 | Type | Use Case | What It Configures |
 |------|----------|-------------------|
 | **Voice Server** | Pi or dedicated voice box | Docker containers, connects to remote API server |
-| **API Server** | Mac/Linux with Claude Code | Just the Claude API wrapper |
+| **API Server** | Mac/Linux with your chosen backend | Just the assistant API wrapper |
 | **Both** | All-in-one single machine | Everything on one box |
 
 ### 3. Start
@@ -68,7 +71,7 @@ claude-phone start
 
 ### All-in-One (Single Machine)
 
-Best for: Mac or Linux server that's always on and has Claude Code installed.
+Best for: Mac or Linux server that's always on and has your chosen assistant backend available.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -84,7 +87,8 @@ Best for: Mac or Linux server that's always on and has Claude Code installed.
 │  │     Single Server (Mac/Linux)                │           │
 │  │  ┌───────────┐    ┌───────────────────┐    │           │
 │  │  │ voice-app │ ←→ │ claude-api-server │    │           │
-│  │  │ (Docker)  │    │ (Claude Code CLI) │    │           │
+│  │  │ (Docker)  │    │ (Configured       │    │           │
+│  │  │           │    │  backend)         │    │           │
 │  │  └───────────┘    └───────────────────┘    │           │
 │  └─────────────────────────────────────────────┘           │
 └─────────────────────────────────────────────────────────────┘
@@ -98,7 +102,7 @@ claude-phone start    # Launches Docker + API server
 
 ### Split Mode (Pi + API Server)
 
-Best for: Dedicated Pi for voice services, Claude running on your main machine.
+Best for: Dedicated Pi for voice services, with the API server backend running on your main machine.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -112,8 +116,9 @@ Best for: Dedicated Pi for voice services, Claude running on your main machine.
 │         ↓                                                    │
 │  ┌─────────────┐         ┌─────────────────────┐           │
 │  │ Raspberry Pi │   ←→   │ Mac/Linux with      │           │
-│  │ (voice-app)  │  HTTP  │ Claude Code CLI     │           │
-│  └─────────────┘         │ (claude-api-server) │           │
+│  │ (voice-app)  │  HTTP  │ Assistant backend   │           │
+│  └─────────────┘         │ (Claude/Codex/      │           │
+│                          │  ChatGPT)           │           │
 │                          └─────────────────────┘           │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -126,7 +131,9 @@ claude-phone start    # Launches Docker containers
 
 **On your Mac/Linux (API Server):**
 ```bash
-claude-phone api-server    # Starts Claude API wrapper on port 3333
+claude-phone api-server                 # Backend defaults to Claude
+claude-phone api-server --backend codex # Wrap Codex CLI instead
+claude-phone api-server --backend chatgpt # Use OpenAI ChatGPT API directly
 ```
 
 Note: On the API server machine, you don't need to run `claude-phone setup` first - the `api-server` command works standalone.
@@ -140,7 +147,7 @@ Note: On the API server machine, you don't need to run `claude-phone setup` firs
 | `claude-phone stop` | Stop all services |
 | `claude-phone status` | Show service status |
 | `claude-phone doctor` | Health check for dependencies and services |
-| `claude-phone api-server [--port N]` | Start API server standalone (default: 3333) |
+| `claude-phone api-server [--port N] [--backend claude|codex|chatgpt]` | Start API server standalone (default: 3333) |
 | `claude-phone device add` | Add a new device/extension |
 | `claude-phone device list` | List configured devices |
 | `claude-phone device remove <name>` | Remove a device |

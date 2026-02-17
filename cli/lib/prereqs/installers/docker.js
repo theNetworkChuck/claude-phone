@@ -32,7 +32,7 @@ export async function installDocker(platform) {
 
   switch (platform.packageManager) {
     case 'apt':
-      result = await installDockerApt();
+      result = await installDockerApt(platform);
       break;
     case 'dnf':
     case 'yum':
@@ -73,10 +73,14 @@ export async function installDocker(platform) {
 
 /**
  * Install Docker on Ubuntu/Debian
+ * @param {object} platform - Platform info from detectPlatform()
  * @returns {Promise<{success: boolean}>}
  */
-async function installDockerApt() {
+async function installDockerApt(platform) {
   console.log(chalk.cyan('\nInstalling Docker via apt...'));
+
+  const dockerRepoDistro = platform?.distro === 'ubuntu' ? 'ubuntu' : 'debian';
+  const dockerRepoBase = `https://download.docker.com/linux/${dockerRepoDistro}`;
 
   const commands = [
     // Install prerequisites
@@ -85,11 +89,11 @@ async function installDockerApt() {
 
     // Add Docker GPG key
     'install -m 0755 -d /etc/apt/keyrings',
-    'curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc',
+    `curl -fsSL ${dockerRepoBase}/gpg -o /etc/apt/keyrings/docker.asc`,
     'chmod a+r /etc/apt/keyrings/docker.asc',
 
     // Add Docker repository
-    'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null',
+    `sh -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] ${dockerRepoBase} $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" > /etc/apt/sources.list.d/docker.list'`,
 
     // Install Docker
     'apt-get update',

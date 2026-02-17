@@ -1,11 +1,11 @@
 # Claude Phone
 
-Voice interface for Claude Code via SIP/3CX. Call your AI, and your AI can call you.
+Voice interface for assistant backends (Claude, Codex, or ChatGPT) via SIP/3CX. Call your AI, and your AI can call you.
 
 ## Project Overview
 
-Claude Phone gives your Claude Code installation a phone number through 3CX PBX integration:
-- **Inbound**: Call an extension and talk to Claude - run commands, check status, ask questions
+Claude Phone gives your assistant backend a phone number through 3CX PBX integration:
+- **Inbound**: Call an extension and talk to your assistant - run commands, check status, ask questions
 - **Outbound**: Your server can call YOU with alerts, then have a conversation about what to do
 
 ## Tech Stack
@@ -17,7 +17,7 @@ Claude Phone gives your Claude Code installation a phone number through 3CX PBX 
 | Media Server | FreeSWITCH (via drachtio-fsmrf) |
 | STT | OpenAI Whisper API |
 | TTS | ElevenLabs API |
-| AI Backend | Claude Code CLI (via HTTP wrapper) |
+| AI Backend | Claude CLI, Codex CLI, or OpenAI ChatGPT API (via HTTP wrapper) |
 | PBX | 3CX (any SIP-compatible works) |
 | Container | Docker Compose |
 
@@ -44,7 +44,7 @@ Claude Phone gives your Claude Code installation a phone number through 3CX PBX 
 │                       ↓                                      │
 │  ┌─────────────────────────────────────────────────┐       │
 │  │   claude-api-server                              │       │
-│  │   Wraps Claude Code CLI with session management │       │
+│  │   Wraps selected backend with session mgmt      │       │
 │  └─────────────────────────────────────────────────┘       │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -119,7 +119,7 @@ claude-phone/
 │   │   └── devices.json      # Device configurations
 │   ├── lib/
 │   │   ├── audio-fork.js     # WebSocket audio streaming
-│   │   ├── claude-bridge.js  # HTTP client for Claude API
+│   │   ├── claude-bridge.js  # HTTP client for assistant API
 │   │   ├── connection-retry.js # Connection retry logic
 │   │   ├── conversation-loop.js  # Core conversation flow
 │   │   ├── device-registry.js    # Multi-device management
@@ -138,7 +138,7 @@ claude-phone/
 │   ├── README-OUTBOUND.md    # Outbound calling API docs
 │   └── API-QUERY-CONTRACT.md # Query API specification
 │
-├── claude-api-server/        # HTTP wrapper for Claude CLI
+├── claude-api-server/        # HTTP wrapper for assistant backends
 │   ├── package.json
 │   ├── server.js             # Express server
 │   └── structured.js         # JSON validation helpers
@@ -204,11 +204,11 @@ npm run lint:fix      # Auto-fix issues
 | POST | `/api/query` | Query device programmatically |
 | GET | `/api/devices` | List configured devices |
 
-### Claude API Server (port 3333)
+### Assistant API Server (port 3333)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/ask` | Send prompt to Claude |
+| POST | `/ask` | Send prompt to selected backend |
 | POST | `/ask-structured` | Send prompt, return JSON |
 | POST | `/end-session` | Clean up session |
 | GET | `/health` | Health check |
@@ -218,8 +218,8 @@ npm run lint:fix      # Auto-fix issues
 1. **CommonJS for voice-app** - Compatibility with drachtio ecosystem
 2. **ES Modules for CLI** - Modern Node.js tooling
 3. **Host networking mode** - Required for FreeSWITCH RTP
-4. **Separate claude-api-server** - Runs where Claude Code CLI is installed
-5. **Session-per-call** - Each call gets Claude session for multi-turn context
+4. **Separate claude-api-server** - Runs where the selected assistant backend is available
+5. **Session-per-call** - Each call keeps backend context for multi-turn conversations
 6. **RTP ports 30000-30100** - Avoids conflict with 3CX SBC (uses 20000-20099)
 7. **Config in ~/.claude-phone** - User config separate from codebase
 
@@ -230,9 +230,11 @@ See `.env.example` for all variables. Key ones:
 | Variable | Purpose |
 |----------|---------|
 | `EXTERNAL_IP` | Server LAN IP for RTP routing |
-| `CLAUDE_API_URL` | URL to claude-api-server |
+| `CLAUDE_API_URL` | URL to assistant API server |
 | `ELEVENLABS_API_KEY` | TTS API key |
-| `OPENAI_API_KEY` | Whisper STT API key |
+| `OPENAI_API_KEY` | Whisper STT key and ChatGPT backend key |
+| `AI_BACKEND` | Backend selector (`claude`, `codex`, or `chatgpt`) |
+| `CHATGPT_MODEL` | Optional ChatGPT model override (default: `gpt-5-mini`) |
 | `SIP_DOMAIN` | 3CX server FQDN |
 | `SIP_REGISTRAR` | SIP registrar address |
 

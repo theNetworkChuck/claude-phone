@@ -1,7 +1,7 @@
 {
   "name": "claude-api-server",
   "version": "1.0.0",
-  "description": "HTTP API wrapper for Claude Code CLI - Voice Interface",
+  "description": "HTTP API wrapper for assistant backends (Claude, Codex, ChatGPT) - Voice Interface",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

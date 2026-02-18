@@ -33,7 +33,7 @@ Select this when setting up a Raspberry Pi or dedicated voice box that connects 
 
 **What it asks for:**
 1. 3CX SIP domain and registrar
-2. API server IP and port (where claude-api-server runs)
+2. API server IP and port (where the API server runs)
 3. ElevenLabs API key and default voice ID
 4. OpenAI API key (for Whisper STT)
 5. Device configuration (name, extension, auth, voice, prompt)
@@ -45,13 +45,13 @@ Select this when setting up a Raspberry Pi or dedicated voice box that connects 
 
 ### API Server
 
-Select this when setting up the Claude API wrapper on a machine with Claude Code CLI.
+Select this when setting up the API server wrapper on a machine with your assistant backend (Claude Code, Codex, or OpenAI Responses API).
 
 **What it asks for:**
 - API server port (default: 3333)
 
 **What `claude-phone start` does:**
-- Starts claude-api-server on the configured port
+- Starts the API server on the configured port using the configured backend (default: Claude)
 
 **Note:** You can also just run `claude-phone api-server` without setup - it defaults to port 3333.
 
@@ -68,7 +68,7 @@ Select this for a single machine running everything.
 
 **What `claude-phone start` does:**
 - Starts Docker containers (drachtio, freeswitch, voice-app)
-- Starts claude-api-server
+- Starts the API server
 
 ### Pi Auto-Detection
 
@@ -98,6 +98,8 @@ claude-phone status             # Show service status
 claude-phone doctor             # Health check for dependencies and services
 claude-phone api-server         # Start API server standalone (default port 3333)
 claude-phone api-server -p 4000 # Start on custom port
+claude-phone api-server --backend codex # Wrap Codex CLI instead of Claude
+claude-phone api-server --backend openai # Use OpenAI Responses API directly
 ```
 
 ### Device Management
@@ -134,6 +136,12 @@ claude-phone uninstall          # Complete removal
 ## Configuration Files
 
 All configuration is stored in `~/.claude-phone/`:
+
+For isolated testing (without touching your real `~/.claude-phone`), set:
+
+```bash
+export CLAUDE_PHONE_CONFIG_DIR=/tmp/claude-phone-config
+```
 
 ```
 ~/.claude-phone/
@@ -205,13 +213,33 @@ claude-phone api-server
 
 # Or on a custom port
 claude-phone api-server --port 4000
+
+# Or wrap Codex CLI instead of Claude
+claude-phone api-server --backend codex
+
+# Or use OpenAI Responses API directly
+claude-phone api-server --backend openai
+
+# Optional OpenAI web search tuning (enabled by default for backend=openai)
+export OPENAI_WEB_SEARCH_ENABLED=true
+export OPENAI_WEB_SEARCH_TYPE=web_search
+export OPENAI_WEB_SEARCH_CONTEXT_SIZE=medium
+export OPENAI_WEB_SEARCH_DOMAINS=openai.com,docs.docker.com
+
+# Verify backend + web-search state
+curl http://localhost:3333/health
 ```
+
+Web search can improve freshness for real-time questions, but may increase latency and tool-call cost.
 
 ## Requirements
 
 - **Node.js 18+** - Required for CLI
 - **Docker** - Required for Voice Server or Both modes
-- **Claude Code CLI** - Required for API Server or Both modes
+- **Assistant Backend (choose one)** - Required for API Server or Both modes
+  - Claude Code CLI
+  - OpenAI Codex CLI (`npm i -g @openai/codex` or `brew install --cask codex`)
+  - OpenAI Responses API (`OPENAI_API_KEY`, no local CLI required; web search supported via `OPENAI_WEB_SEARCH_*` env vars)
 
 ## Development
 

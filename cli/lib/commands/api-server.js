@@ -13,20 +13,44 @@ import { savePid, removePid } from '../process-manager.js';
  * @returns {Promise<void>}
  */
 export async function apiServerCommand(options = {}) {
-  console.log(chalk.bold.cyan('\n🤖 Claude API Server\n'));
+  console.log(chalk.bold.cyan('\n🤖 API Server\n'));
 
   // Load config to get port if not provided
   let port = options.port;
-  if (!port && configExists()) {
-    const config = await loadConfig();
+  let backend = options.backend;
+  let configuredOpenAIKey = '';
+  let config = null;
+  if (configExists()) {
+    config = await loadConfig();
+    configuredOpenAIKey = config.api?.openai?.apiKey || '';
+    backend = backend || config.server?.assistantCli || 'claude';
+  }
+  if (!port && config) {
     port = config.server?.claudeApiPort || 3333;
   }
   if (!port) {
     port = 3333; // Final fallback
   }
+  backend = String(backend || process.env.AI_BACKEND || 'claude').trim().toLowerCase();
+  if (backend === 'chatgpt') backend = 'openai'; // Legacy alias
+  if (!['claude', 'codex', 'openai'].includes(backend)) {
+    throw new Error(`Invalid backend "${backend}". Use "claude", "codex", or "openai".`);
+  }
 
   console.log(chalk.gray(`Starting API server on port ${port}...`));
-  console.log(chalk.gray('This wraps Claude Code CLI for Pi connections.\n'));
+  console.log(chalk.gray(`Backend: ${backend}`));
+  console.log(chalk.gray('This wraps your local assistant backend for Pi connections.\n'));
+
+  if (backend === 'openai' && !(process.env.OPENAI_API_KEY || configuredOpenAIKey)) {
+    console.log(chalk.yellow('⚠️  OPENAI_API_KEY not found in environment or config.'));
+    console.log(chalk.yellow('   OpenAI backend requests will fail until an API key is provided.\n'));
+  }
+  if (backend === 'openai') {
+    const webSearchEnabled = String(
+      process.env.OPENAI_WEB_SEARCH_ENABLED ?? process.env.OPENAI_WEB_SEARCH ?? 'true'
+    ).trim();
+    console.log(chalk.gray(`OpenAI web search: ${webSearchEnabled} (set OPENAI_WEB_SEARCH_ENABLED to override)\n`));
+  }
 
   const projectRoot = getProjectRoot();
   const serverPath = path.join(projectRoot, 'claude-api-server', 'server.js');
@@ -37,7 +61,11 @@ export async function apiServerCommand(options = {}) {
     const child = spawn('node', [serverPath], {
       env: {
         ...process.env,
-        PORT: port.toString()
+        PORT: port.toString(),
+        AI_BACKEND: backend,
+        ...(backend === 'openai' && !process.env.OPENAI_API_KEY && configuredOpenAIKey
+          ? { OPENAI_API_KEY: configuredOpenAIKey }
+          : {})
       },
       stdio: 'inherit'
     });

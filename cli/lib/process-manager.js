@@ -60,7 +60,7 @@ export async function isServerRunning(pidPath = null) {
  * @param {string} [pidPath] - Optional PID file path (for testing)
  * @returns {Promise<number>} Process PID
  */
-export async function startServer(serverPath, port, pidPath = null) {
+export async function startServer(serverPath, port, pidPath = null, envExtra = {}) {
   pidPath = pidPath || getPidPath();
 
   // Check if already running
@@ -77,7 +77,8 @@ export async function startServer(serverPath, port, pidPath = null) {
       stdio: 'ignore',
       env: {
         ...process.env,
-        PORT: port
+        PORT: port,
+        ...envExtra
       }
     });
 

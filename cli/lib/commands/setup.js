@@ -42,7 +42,7 @@ async function promptInstallationType(currentType = 'both') {
         value: 'voice-server'
       },
       {
-        name: 'API Server - Claude Code wrapper, minimal setup',
+        name: 'API Server - Assistant CLI wrapper (Claude or Codex), minimal setup',
         value: 'api-server'
       },
       {
@@ -240,25 +240,25 @@ async function setupInstallationType(installationType, existingConfig, isPi, opt
       console.log(chalk.bold.cyan('📋 API server instructions:\n'));
       console.log(chalk.gray('  On your API server, run:'));
       console.log(chalk.white(`    claude-phone api-server --port ${config.server.claudeApiPort}\n`));
-      console.log(chalk.gray('  This starts the Claude API wrapper that the Pi will connect to.\n'));
+      console.log(chalk.gray('  This starts the API server wrapper that the Pi will connect to.\n'));
       console.log(chalk.bold.cyan('📋 Pi-side next steps:\n'));
       console.log(chalk.gray('  1. Run "claude-phone start" to launch voice-app'));
       console.log(chalk.gray('  2. Call extension ' + config.devices[0].extension + ' from your phone'));
-      console.log(chalk.gray('  3. Start talking to Claude!\n'));
+      console.log(chalk.gray('  3. Start talking to your AI!\n'));
     } else {
       console.log(chalk.gray('Make sure your API server is running with:'));
       console.log(chalk.gray('  claude-phone api-server (on the API server machine)\n'));
       console.log(chalk.gray('Next steps:'));
       console.log(chalk.gray('  1. Run "claude-phone start" to launch voice services'));
       console.log(chalk.gray('  2. Call extension ' + config.devices[0].extension + ' from your phone'));
-      console.log(chalk.gray('  3. Start talking to Claude!\n'));
+      console.log(chalk.gray('  3. Start talking to your AI!\n'));
     }
   } else {
     // Both
     console.log(chalk.gray('Next steps:'));
     console.log(chalk.gray('  1. Run "claude-phone start" to launch all services'));
     console.log(chalk.gray('  2. Call extension ' + config.devices[0].extension + ' from your phone'));
-    console.log(chalk.gray('  3. Start talking to Claude!\n'));
+    console.log(chalk.gray('  3. Start talking to your AI!\n'));
   }
 }
 
@@ -271,6 +271,16 @@ async function setupApiServer(config) {
   console.log(chalk.bold.cyan('\n🖥️  API Server Configuration\n'));
 
   const answers = await inquirer.prompt([{
+    type: 'list',
+    name: 'assistantCli',
+    message: 'Which assistant backend should the API server use?',
+    default: config.server?.assistantCli || 'claude',
+    choices: [
+      { name: 'Claude Code CLI (requires Claude subscription)', value: 'claude' },
+      { name: 'OpenAI Codex CLI (codex)', value: 'codex' },
+      { name: 'OpenAI Responses API (openai)', value: 'openai' }
+    ]
+  }, {
     type: 'input',
     name: 'port',
     message: 'API server port:',
@@ -288,6 +298,7 @@ async function setupApiServer(config) {
     ...config,
     server: {
       ...config.server,
+      assistantCli: answers.assistantCli,
       claudeApiPort: parseInt(answers.port, 10)
     }
   };
@@ -565,7 +576,7 @@ async function setupPi(config) {
     {
       type: 'input',
       name: 'macIp',
-      message: 'API server IP address (where claude-api-server runs):',
+      message: 'API server IP address (where the API server runs):',
       default: config.deployment.pi.macIp || '',
       validate: (input) => {
         if (!input || input.trim() === '') {
@@ -580,7 +591,7 @@ async function setupPi(config) {
     {
       type: 'input',
       name: 'claudeApiPort',
-      message: 'Claude API server port:',
+      message: 'API server port:',
       default: String(config.server?.claudeApiPort || 3333),
       validate: (input) => {
         const port = parseInt(input, 10);
@@ -607,7 +618,7 @@ async function setupPi(config) {
     reachSpinner.succeed(`API server is healthy at ${apiUrl}`);
   } else if (apiHealth.reachable) {
     reachSpinner.warn(`API server reachable but not responding at ${apiUrl}`);
-    console.log(chalk.yellow('  ⚠️  Make sure claude-api-server is running\n'));
+    console.log(chalk.yellow('  ⚠️  Make sure the API server is running\n'));
   } else {
     reachSpinner.warn(`Cannot reach API server at ${apiUrl}`);
     console.log(chalk.yellow('  ⚠️  Make sure API server is running and port is open (firewall)\n'));
@@ -644,11 +655,11 @@ async function setupPi(config) {
   console.log(chalk.bold.cyan('📋 API server instructions:\n'));
   console.log(chalk.gray('  On your API server, run:'));
   console.log(chalk.white(`    claude-phone api-server --port ${config.server.claudeApiPort}\n`));
-  console.log(chalk.gray('  This starts the Claude API wrapper that the Pi will connect to.\n'));
+  console.log(chalk.gray('  This starts the API server wrapper that the Pi will connect to.\n'));
   console.log(chalk.bold.cyan('📋 Pi-side next steps:\n'));
   console.log(chalk.gray('  1. Run "claude-phone start" to launch voice-app'));
   console.log(chalk.gray('  2. Call extension ' + config.devices[0].extension + ' from your phone'));
-  console.log(chalk.gray('  3. Start talking to Claude!\n'));
+  console.log(chalk.gray('  3. Start talking to your AI!\n'));
 
   return config;
 }
@@ -678,6 +689,7 @@ function createDefaultConfig() {
       transport: 'udp'
     },
     server: {
+      assistantCli: 'claude',
       claudeApiPort: 3333,
       httpPort: 3000,
       externalIp: 'auto'
@@ -1048,6 +1060,17 @@ async function setupServer(config) {
 
   const answers = await inquirer.prompt([
     {
+      type: 'list',
+      name: 'assistantCli',
+      message: 'Which assistant backend should the API server use?',
+      default: config.server.assistantCli || 'claude',
+      choices: [
+        { name: 'Claude Code CLI (requires Claude subscription)', value: 'claude' },
+        { name: 'OpenAI Codex CLI (codex)', value: 'codex' },
+        { name: 'OpenAI Responses API (openai)', value: 'openai' }
+      ]
+    },
+    {
       type: 'input',
       name: 'externalIp',
       message: 'Server LAN IP (for RTP audio):',
@@ -1065,7 +1088,7 @@ async function setupServer(config) {
     {
       type: 'input',
       name: 'claudeApiPort',
-      message: 'Claude API server port:',
+      message: 'API server port:',
       default: config.server.claudeApiPort,
       validate: (input) => {
         const port = parseInt(input, 10);
@@ -1090,6 +1113,7 @@ async function setupServer(config) {
     }
   ]);
 
+  config.server.assistantCli = answers.assistantCli;
   config.server.externalIp = answers.externalIp;
   config.server.claudeApiPort = parseInt(answers.claudeApiPort, 10);
   config.server.httpPort = parseInt(answers.httpPort, 10);

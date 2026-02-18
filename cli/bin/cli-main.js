@@ -22,7 +22,7 @@ const program = new Command();
 
 program
   .name('claude-phone')
-  .description('Voice interface for Claude Code via SIP - Call your AI, and your AI can call you')
+  .description('Voice interface for an assistant backend (Claude, Codex, or OpenAI) via SIP - Call your AI, and your AI can call you')
   .version('1.0.0');
 
 program
@@ -40,7 +40,7 @@ program
 
 program
   .command('start')
-  .description('Start all services (Docker containers + claude-api-server)')
+  .description('Start all services (Docker containers + API server)')
   .action(async () => {
     try {
       await startCommand();
@@ -88,8 +88,9 @@ program
 
 program
   .command('api-server')
-  .description('Start Claude API server for Pi remote connections')
+  .description('Start API server for Pi remote connections')
   .option('-p, --port <port>', 'Port to listen on', '3333')
+  .option('-b, --backend <backend>', 'Backend to use (claude|codex|openai)')
   .action(async (options) => {
     try {
       const port = parseInt(options.port, 10);
@@ -97,7 +98,7 @@ program
         console.error(chalk.red('\n✗ Port must be between 1024 and 65535\n'));
         process.exit(1);
       }
-      await apiServerCommand({ port });
+      await apiServerCommand({ port, backend: options.backend });
     } catch (error) {
       console.error(chalk.red(`\n✗ API server failed: ${error.message}\n`));
       process.exit(1);

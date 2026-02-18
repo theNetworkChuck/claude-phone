@@ -37,11 +37,18 @@ export async function configShowCommand() {
   }
 
   const config = await loadConfig();
+  const normalizedBackend = config.server?.assistantCli === 'chatgpt'
+    ? 'openai'
+    : (config.server?.assistantCli || 'claude');
+
+  // Support both current config.api.* and legacy config.apiKeys.* structures.
+  const openAIKey = config.api?.openai?.apiKey || config.apiKeys?.openai || '';
+  const elevenLabsKey = config.api?.elevenlabs?.apiKey || config.apiKeys?.elevenlabs || '';
 
   // API Keys
   console.log(chalk.bold('API Keys:'));
-  console.log(chalk.gray(`  OpenAI API Key: ${redactValue(config.apiKeys.openai)}`));
-  console.log(chalk.gray(`  ElevenLabs API Key: ${redactValue(config.apiKeys.elevenlabs)}`));
+  console.log(chalk.gray(`  OpenAI API Key: ${redactValue(openAIKey)}`));
+  console.log(chalk.gray(`  ElevenLabs API Key: ${redactValue(elevenLabsKey)}`));
 
   // 3CX Configuration
   console.log(chalk.bold('\n3CX Configuration:'));
@@ -50,14 +57,15 @@ export async function configShowCommand() {
 
   // Server Configuration
   console.log(chalk.bold('\nServer:'));
-  console.log(chalk.gray(`  External IP: ${config.server.externalIp}`));
-  console.log(chalk.gray(`  Voice App Port: ${config.server.voiceAppPort}`));
-  console.log(chalk.gray(`  Claude API Port: ${config.server.claudeApiPort}`));
-  console.log(chalk.gray(`  Claude API URL: ${config.server.claudeApiUrl}`));
+  console.log(chalk.gray(`  Backend: ${normalizedBackend}`));
+  console.log(chalk.gray(`  External IP: ${config.server?.externalIp ?? '[not set]'}`));
+  console.log(chalk.gray(`  Voice App Port: ${config.server?.voiceAppPort ?? '[not set]'}`));
+  console.log(chalk.gray(`  API Server Port: ${config.server?.claudeApiPort ?? '[not set]'}`));
+  console.log(chalk.gray(`  API Server URL: ${config.server?.claudeApiUrl ?? '[not set]'}`));
 
   // Devices
   console.log(chalk.bold('\nDevices:'));
-  if (config.devices.length === 0) {
+  if (!config.devices || config.devices.length === 0) {
     console.log(chalk.gray('  (none configured)'));
   } else {
     for (const device of config.devices) {

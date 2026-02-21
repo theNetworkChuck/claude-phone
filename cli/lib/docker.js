@@ -353,6 +353,7 @@ export async function stopContainers() {
 
 /**
  * Get status of Docker containers
+ * Tries docker-compose ps first with JSON format, falls back to docker ps if needed
  * @returns {Promise<Array<{name: string, status: string}>>}
  */
 export async function getContainerStatus() {
@@ -362,38 +363,97 @@ export async function getContainerStatus() {
     return [];
   }
 
+  const configDir = getConfigDir();
   const compose = getComposeCommand();
-  const composeArgs = [...compose.args, '-f', dockerComposePath, 'ps', '--format', 'json'];
 
-  return new Promise((resolve) => {
-    const child = spawn(compose.cmd, composeArgs, {
-      stdio: 'pipe'
-    });
+  // First try: docker-compose ps with JSON format
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const composeArgs = [...compose.args, '-f', dockerComposePath, 'ps', '--format', 'json'];
 
-    let output = '';
-    child.stdout.on('data', (data) => {
-      output += data.toString();
-    });
+      const child = spawn(compose.cmd, composeArgs, {
+        cwd: configDir,
+        stdio: 'pipe'
+      });
 
-    child.on('close', (code) => {
-      if (code === 0) {
-        try {
-          // Parse JSON lines (one per container)
-          const lines = output.trim().split('\n').filter(l => l);
-          const containers = lines.map(line => {
-            const data = JSON.parse(line);
-            return {
-              name: data.Name || data.Service,
-              status: data.State || data.Status
-            };
-          });
-          resolve(containers);
-        } catch (error) {
-          resolve([]);
+      let output = '';
+      let errorOutput = '';
+
+      child.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      child.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      child.on('close', (code) => {
+        if (code === 0 && output.trim()) {
+          try {
+            // Parse JSON lines (one per container)
+            const lines = output.trim().split('\n').filter(l => l.trim());
+            const containers = lines.map(line => {
+              const data = JSON.parse(line);
+              return {
+                name: data.Name || data.Service,
+                status: data.State || data.Status
+              };
+            });
+            resolve(containers);
+          } catch (parseError) {
+            reject(new Error('JSON parse failed, falling back'));
+          }
+        } else {
+          reject(new Error(`docker compose ps failed (code: ${code})`));
         }
-      } else {
-        resolve([]);
-      }
+      });
+
+      child.on('error', (err) => {
+        reject(err);
+      });
     });
-  });
+
+    return result;
+  } catch (error) {
+    // Fallback: Use docker ps to find claude-phone containers
+    try {
+      const result = await new Promise((resolve) => {
+        const child = spawn('docker', ['ps', '--format', '{{.Names}}\t{{.Status}}'], {
+          stdio: 'pipe'
+        });
+
+        let output = '';
+        child.stdout.on('data', (data) => {
+          output += data.toString();
+        });
+
+        child.on('close', (code) => {
+          if (code === 0) {
+            try {
+              const lines = output.trim().split('\n').filter(l => l.trim());
+              // Filter for claude-phone related containers
+              const containers = lines
+                .filter(line => line.match(/voice-app|drachtio|freeswitch/i))
+                .map(line => {
+                  const [name, ...statusParts] = line.split('\t');
+                  return {
+                    name: name || 'unknown',
+                    status: statusParts.join('\t') || 'unknown'
+                  };
+                });
+              resolve(containers);
+            } catch (e) {
+              resolve([]);
+            }
+          } else {
+            resolve([]);
+          }
+        });
+      });
+
+      return result;
+    } catch (fallbackError) {
+      return [];
+    }
+  }
 }
